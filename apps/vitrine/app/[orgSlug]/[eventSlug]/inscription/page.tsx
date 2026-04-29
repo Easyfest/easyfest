@@ -1,9 +1,9 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { createServerClient } from "@/lib/supabase/server";
+import { SiteFooter, SiteHeader } from "@/components/site-header";
 import { VolunteerApplicationForm } from "@/components/volunteer-application-form";
-
-export const dynamic = "force-dynamic";
+import { createServerClient } from "@/lib/supabase/server";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; eventSlug: string }>;
@@ -16,7 +16,9 @@ export default async function InscriptionPage({ params }: PageProps) {
   const { data: ev } = await supabase
     .from("events")
     .select(`
-      id, name, slug, status, registration_open_at, registration_close_at,
+      id, name, slug, status,
+      starts_at, ends_at, timezone,
+      registration_open_at, registration_close_at,
       max_preferred_positions,
       organization:organization_id (id, name, slug)
     `)
@@ -27,12 +29,25 @@ export default async function InscriptionPage({ params }: PageProps) {
 
   if (ev.status !== "open") {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <h1 className="font-display text-3xl font-bold">Inscriptions fermées</h1>
-        <p className="mt-3 text-brand-ink/70">
-          Les inscriptions pour {ev.name} ne sont pas ouvertes pour le moment.
-        </p>
-      </main>
+      <div className="flex min-h-screen flex-col">
+        <SiteHeader />
+        <main className="flex-1">
+          <div className="mx-auto max-w-2xl px-6 py-20 text-center">
+            <p className="text-5xl">🚪</p>
+            <h1 className="mt-4 font-display text-3xl font-bold">Inscriptions fermées</h1>
+            <p className="mt-3 text-brand-ink/70">
+              Les inscriptions pour <strong>{ev.name}</strong> ne sont pas ouvertes pour le moment.
+            </p>
+            <Link
+              href={`/${orgSlug}`}
+              className="mt-8 inline-block rounded-xl bg-brand-coral px-6 py-3 font-medium text-white"
+            >
+              Voir les autres festivals
+            </Link>
+          </div>
+        </main>
+        <SiteFooter />
+      </div>
     );
   }
 
@@ -44,26 +59,10 @@ export default async function InscriptionPage({ params }: PageProps) {
     .order("display_order", { ascending: true });
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-10">
-      <header className="mb-8">
-        <p className="text-sm font-medium uppercase tracking-widest text-brand-coral">
-          {(ev as any).organization?.name} · Candidature bénévole
-        </p>
-        <h1 className="mt-1 font-display text-3xl font-bold">{ev.name}</h1>
-        <p className="mt-2 text-sm text-brand-ink/60">
-          ~5 minutes. Tes données restent privées (RGPD). L'équipe valide ta candidature
-          et t'envoie ensuite ton accès personnel.
-        </p>
-      </header>
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
 
-      <VolunteerApplicationForm
-        eventId={ev.id}
-        eventName={ev.name}
-        organizationSlug={orgSlug}
-        eventSlug={eventSlug}
-        maxPreferredPositions={ev.max_preferred_positions ?? 3}
-        positions={positions ?? []}
-      />
-    </main>
-  );
-}
+      <main className="flex-1">
+        <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+          <Link
+            href={`/${o

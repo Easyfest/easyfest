@@ -1,7 +1,5 @@
 import { formatDateFr } from "@easyfest/shared";
 
-export const dynamic = "force-dynamic";
-
 export const metadata = {
   title: "Politique de confidentialité",
 };
