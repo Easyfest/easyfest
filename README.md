@@ -146,3 +146,5 @@ UNLICENSED — code interne Easyfest. Pas de redistribution sans accord écrit.
 ---
 
 *Built by the Easyfest engineering crew · Cellule Hermes · Avril 2026.*
+
+<!-- deploy trigger 1777428109 -->
