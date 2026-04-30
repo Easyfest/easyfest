@@ -1,12 +1,14 @@
+import Link from "next/link";
+
 import { createServerClient } from "@/lib/supabase/server";
-import { PlanningDnd } from "./PlanningDnd";
+import { PlanningTeamsBoard } from "./PlanningTeamsBoard";
 
 interface PageProps {
   params: Promise<{ orgSlug: string; eventSlug: string }>;
 }
 
 export default async function RegiePlanningPage({ params }: PageProps) {
-  const { eventSlug } = await params;
+  const { orgSlug, eventSlug } = await params;
   const supabase = createServerClient();
 
   const { data: ev } = await supabase
@@ -16,69 +18,137 @@ export default async function RegiePlanningPage({ params }: PageProps) {
     .maybeSingle();
   if (!ev) return null;
 
-  const { data: shifts } = await supabase
-    .from("shifts")
-    .select(`
-      id, starts_at, ends_at, needs_count,
-      position:position_id (id, name, color, icon, event_id),
-      assignments:assignments (
-        id, status, volunteer_user_id,
-        volunteer:volunteer_user_id (volunteer_profiles!user_id (full_name, first_name))
-      )
-    `)
-    .order("starts_at", { ascending: true });
+  // 1. Toutes les équipes (positions actives, ordre)
+  const { data: positions } = await supabase
+    .from("positions")
+    .select("id, name, slug, color, icon, description, display_order, needs_count_default")
+    .eq("event_id", ev.id)
+    .eq("is_active", true)
+    .order("display_order", { ascending: true });
 
-  // Filtrer par event
-  const eventShifts = (shifts ?? []).filter((s: any) => s.position?.event_id === ev.id);
-
-  // Bénévoles validés mais sans assignment = pool
+  // 2. Tous les bénévoles validés (memberships role=volunteer is_active)
   const { data: members } = await supabase
     .from("memberships")
     .select(`
-      user_id, role,
-      profile:volunteer_profiles!memberships_user_id_fkey (full_name, first_name)
+      user_id,
+      profile:volunteer_profiles!memberships_user_id_fkey (
+        full_name, first_name, avatar_url, phone, email, is_returning
+      )
     `)
     .eq("event_id", ev.id)
     .eq("role", "volunteer")
     .eq("is_active", true);
 
-  const allAssignmentUserIds = new Set(
-    eventShifts.flatMap((s: any) => s.assignments.map((a: any) => a.volunteer_user_id)),
-  );
-  const unassignedPool = (members ?? [])
-    .filter((m: any) => !allAssignmentUserIds.has(m.user_id))
-    .map((m: any) => ({
-      id: `unassigned-${m.user_id}`,
-      status: "pending",
-      volunteer_user_id: m.user_id,
-      volunteer: { full_name: m.profile?.full_name ?? "—", first_name: m.profile?.first_name ?? null },
-    }));
+  const userIds = (members ?? []).map((m: any) => m.user_id);
 
-  const buckets = eventShifts.map((s: any) => ({
-    id: s.id,
-    starts_at: s.starts_at,
-    ends_at: s.ends_at,
-    needs_count: s.needs_count,
-    position_name: s.position?.name ?? "?",
-    position_color: s.position?.color ?? "#FF5E5B",
-    assignments: s.assignments.map((a: any) => ({
-      id: a.id,
-      status: a.status,
-      volunteer_user_id: a.volunteer_user_id,
-      volunteer: a.volunteer?.volunteer_profiles ?? { full_name: "—", first_name: null },
-    })),
+  // 3. Récupérer les emails des users pour matcher avec volunteer_applications
+  const { data: applications } = await supabase
+    .from("volunteer_applications")
+    .select("email, preferred_position_slugs, bio, skills, limitations, arrival_at, departure_at, status")
+    .eq("event_id", ev.id)
+    .in("status", ["validated", "pending"]);
+
+  // 4. Toutes les assignments actives pour mapper bénévole → position
+  const { data: assignments } = await supabase
+    .from("assignments")
+    .select(`
+      id, status, volunteer_user_id, shift_id,
+      shift:shift_id (
+        id, starts_at, ends_at,
+        position:position_id (id, slug, name, event_id)
+      )
+    `)
+    .in("status", ["pending", "validated"]);
+
+  const eventAssignments = (assignments ?? []).filter(
+    (a: any) => a.shift?.position?.event_id === ev.id,
+  );
+
+  // 5. Construire un index : userEmail → preferred_position_slugs
+  const prefByEmail = new Map<string, { slugs: string[]; bio: string | null; arrival_at: string | null; departure_at: string | null }>();
+  (applications ?? []).forEach((app: any) => {
+    if (!app.email) return;
+    const key = app.email.toLowerCase();
+    prefByEmail.set(key, {
+      slugs: app.preferred_position_slugs ?? [],
+      bio: app.bio,
+      arrival_at: app.arrival_at,
+      departure_at: app.departure_at,
+    });
+  });
+
+  // 6. Construire la liste de bénévoles avec leurs équipes actuelles + souhaits
+  const volunteers = (members ?? []).map((m: any) => {
+    const email = (m.profile?.email ?? "").toLowerCase();
+    const pref = prefByEmail.get(email);
+    const myAssignments = eventAssignments.filter((a: any) => a.volunteer_user_id === m.user_id);
+    const positionIds = Array.from(new Set(myAssignments.map((a: any) => a.shift.position.id)));
+    return {
+      user_id: m.user_id,
+      full_name: m.profile?.full_name ?? "—",
+      first_name: m.profile?.first_name ?? null,
+      avatar_url: m.profile?.avatar_url ?? null,
+      phone: m.profile?.phone ?? null,
+      email: m.profile?.email ?? null,
+      is_returning: m.profile?.is_returning ?? false,
+      preferred_slugs: pref?.slugs ?? [],
+      bio: pref?.bio ?? null,
+      arrival_at: pref?.arrival_at ?? null,
+      departure_at: pref?.departure_at ?? null,
+      position_ids: positionIds as string[],
+      assignments: myAssignments.map((a: any) => ({
+        id: a.id,
+        shift_id: a.shift_id,
+        position_id: a.shift.position.id,
+        starts_at: a.shift.starts_at,
+        ends_at: a.shift.ends_at,
+      })),
+    };
+  });
+
+  // 7. Construire les équipes (positions) avec leurs bénévoles
+  const teams = (positions ?? []).map((p: any) => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug,
+    color: p.color ?? "#FF5E5B",
+    icon: p.icon,
+    description: p.description,
+    needs_count_default: p.needs_count_default,
+    members: volunteers.filter((v) => v.position_ids.includes(p.id)),
   }));
+
+  const pool = volunteers.filter((v) => v.position_ids.length === 0);
 
   return (
     <div className="space-y-4">
-      <header>
-        <h2 className="font-display text-2xl font-bold">Planning maître</h2>
-        <p className="text-sm text-brand-ink/60">
-          Drag & drop pour ré-affecter les bénévoles entre créneaux ou les renvoyer au pool.
-        </p>
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="font-display text-2xl font-bold">Planning par équipes</h2>
+          <p className="text-sm text-brand-ink/60">
+            Glisse un bénévole d'une équipe à l'autre. Ses souhaits exprimés à l'inscription apparaissent
+            sur sa carte (pastille verte ✓ si l'équipe correspond, orange ◇ sinon).
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <Link
+            href={`/regie/${orgSlug}/${eventSlug}/planning/shifts`}
+            className="rounded-lg border border-brand-ink/15 px-3 py-1.5 font-medium text-brand-ink/80 hover:bg-brand-ink/5"
+          >
+            Vue par créneaux →
+          </Link>
+        </div>
       </header>
 
-      <PlanningDnd initialBuckets={buckets} unassigned={unassignedPool} />
+      <div className="flex gap-3 text-xs text-brand-ink/60">
+        <span><strong>{volunteers.length}</strong> bénévoles validés</span>
+        <span>·</span>
+        <span><strong>{pool.length}</strong> en attente d'équipe</span>
+        <span>·</span>
+        <span><strong>{teams.length}</strong> équipes</span>
+      </div>
+
+      <PlanningTeamsBoard initialTeams={teams} initialPool={pool} eventId={ev.id} />
     </div>
   );
 }
