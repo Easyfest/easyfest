@@ -95,6 +95,53 @@ export default async function RegieDashboard({ params }: PageProps) {
         <Kpi label="Repas servis" value={mealsServedToday ?? 0} emoji="🍽️" />
       </section>
 
+      {/* Actions admin */}
+      <section>
+        <h3 className="mb-3 font-display text-lg font-semibold">Actions administratives</h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <a
+            href={`/api/prefecture-export?eventId=${ev.id}`}
+            className="flex items-start gap-3 rounded-2xl border border-brand-ink/10 bg-white p-4 transition hover:border-brand-coral/40 hover:shadow-soft"
+          >
+            <span className="text-3xl">📦</span>
+            <div className="flex-1">
+              <p className="font-display font-semibold">Pack préfecture</p>
+              <p className="mt-0.5 text-xs text-brand-ink/60">
+                ZIP avec liste bénévoles, sponsors, conventions signées + récap.
+                À joindre à la déclaration manifestation.
+              </p>
+            </div>
+            <span className="text-brand-coral">↓</span>
+          </a>
+          <Link
+            href={`/regie/${orgSlug}/${eventSlug}/sponsors`}
+            className="flex items-start gap-3 rounded-2xl border border-brand-ink/10 bg-white p-4 transition hover:border-brand-coral/40 hover:shadow-soft"
+          >
+            <span className="text-3xl">🤝</span>
+            <div className="flex-1">
+              <p className="font-display font-semibold">Sponsors & partenaires</p>
+              <p className="mt-0.5 text-xs text-brand-ink/60">
+                CRM des partenaires, suivi contrats et contreparties.
+              </p>
+            </div>
+            <span className="text-brand-coral">→</span>
+          </Link>
+          <Link
+            href={`/regie/${orgSlug}/${eventSlug}/applications`}
+            className="flex items-start gap-3 rounded-2xl border border-brand-ink/10 bg-white p-4 transition hover:border-brand-coral/40 hover:shadow-soft"
+          >
+            <span className="text-3xl">📧</span>
+            <div className="flex-1">
+              <p className="font-display font-semibold">Inviter bénévoles</p>
+              <p className="mt-0.5 text-xs text-brand-ink/60">
+                Envoie un magic-link aux pré-bénévoles validés pour activer leur compte.
+              </p>
+            </div>
+            <span className="text-brand-coral">→</span>
+          </Link>
+        </div>
+      </section>
+
       {/* Couverture postes */}
       <section>
         <h3 className="mb-3 font-display text-lg font-semibold">Couverture des postes</h3>

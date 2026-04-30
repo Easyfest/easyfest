@@ -49,6 +49,7 @@ export default async function RegieLayout({ children, params }: Props) {
             <NavTab href={`/regie/${orgSlug}/${eventSlug}`} label="Dashboard" />
             <NavTab href={`/regie/${orgSlug}/${eventSlug}/applications`} label="Candidatures" />
             <NavTab href={`/regie/${orgSlug}/${eventSlug}/planning`} label="Planning" />
+            <NavTab href={`/regie/${orgSlug}/${eventSlug}/sponsors`} label="Sponsors" />
             <NavTab href={`/regie/${orgSlug}/${eventSlug}/safer`} label="Safer" />
             <NavTab href={`/regie/${orgSlug}/${eventSlug}/messages`} label="Messages" />
           </nav>
