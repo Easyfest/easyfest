@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { ROLE_CARDS_ORDER, ROLE_DEFINITIONS, type RoleKind } from "@easyfest/shared";
 import { createServerClient } from "@/lib/supabase/server";
+import { onboardCurrentUser } from "@/app/actions/onboard";
 
 const EMOJI: Record<RoleKind, string> = {
   volunteer: "🎟️",
@@ -19,6 +20,9 @@ export default async function HubPage() {
   const supabase = createServerClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) redirect("/auth/login?redirect=/hub");
+
+  // Upgrade auto : si l'user a des applications validées sans encore de membership, on les onboard
+  await onboardCurrentUser();
 
   const { data: memberships } = await supabase
     .from("memberships")
