@@ -115,8 +115,8 @@ export default async function VolunteerHome({ params }: PageProps) {
         </section>
       )}
 
-      <section className="grid grid-cols-3 gap-2">
-        <Stat label="Repas restants" value={mealsRemaining ?? 0} emoji="🍽️" />
+      <section className="grid grid-cols-4 gap-2">
+        <Stat label="Repas" value={mealsRemaining ?? 0} emoji="🍽️" />
         <Link
           href={`/v/${orgSlug}/${eventSlug}/wellbeing`}
           className="rounded-xl border border-brand-ink/10 bg-white p-3 text-center hover:bg-white"
@@ -127,12 +127,21 @@ export default async function VolunteerHome({ params }: PageProps) {
           </p>
         </Link>
         <Link
+          href={`/v/${orgSlug}/${eventSlug}/plan`}
+          className="rounded-xl border border-brand-ink/10 bg-white p-3 text-center hover:bg-white"
+        >
+          <p className="text-2xl">🗺️</p>
+          <p className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-ink/50">
+            Plan
+          </p>
+        </Link>
+        <Link
           href={`/v/${orgSlug}/${eventSlug}/profile`}
           className="rounded-xl border border-brand-ink/10 bg-white p-3 text-center hover:bg-white"
         >
           <p className="text-2xl">👤</p>
           <p className="mt-1 text-[10px] font-medium uppercase tracking-widest text-brand-ink/50">
-            Mon profil
+            Profil
           </p>
         </Link>
       </section>
