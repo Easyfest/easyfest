@@ -83,3 +83,13 @@ select
   legal_ape_code,
   president_name
 from public.organizations where slug = 'icmpaca';
+
+-- ───────────────────────────────────────────────────────────
+-- Plans RDL 2026 pré-configurés (servis depuis /public Next.js)
+-- ───────────────────────────────────────────────────────────
+update public.events
+set
+  site_plan_url = '/festival-plans/rdl-2026-day.jpg',
+  site_plan_dark_url = '/festival-plans/rdl-2026-night.jpg',
+  site_plan_caption = 'Plan officiel Roots du Lac 2026 — Montauroux'
+where slug = 'rdl-2026';
