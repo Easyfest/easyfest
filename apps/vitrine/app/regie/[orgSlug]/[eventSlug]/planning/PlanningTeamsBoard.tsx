@@ -58,6 +58,13 @@ export function PlanningTeamsBoard({ initialTeams, initialPool, eventId }: Props
   const [feedback, setFeedback] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
 
+  // Callback invitation : redirige vers la page Candidatures pour cliquer "Inviter"
+  // (la Server Action inviteVolunteer demande un applicationId, pas juste un email)
+  const handleInviteRequest = (email: string) => {
+    setFeedback(`💡 Pour inviter ${email}, va sur l'onglet Candidatures → bouton 📧 Inviter à côté de son nom`);
+    setTimeout(() => setFeedback(null), 6000);
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor),
@@ -179,12 +186,13 @@ export function PlanningTeamsBoard({ initialTeams, initialPool, eventId }: Props
           pool={filteredPool}
           teamSlugById={teamSlugById}
           totalPool={pool.length}
+          onInviteRequest={handleInviteRequest}
         />
 
         {/* Grid des équipes */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {filteredTeams.map((team) => (
-            <TeamColumn key={team.id} team={team} teamSlugById={teamSlugById} />
+            <TeamColumn key={team.id} team={team} teamSlugById={teamSlugById} onInviteRequest={handleInviteRequest} />
           ))}
         </div>
       </DndContext>
@@ -196,10 +204,12 @@ function PoolDroppable({
   pool,
   teamSlugById,
   totalPool,
+  onInviteRequest,
 }: {
   pool: Volunteer[];
   teamSlugById: Map<string, string>;
   totalPool: number;
+  onInviteRequest?: (email: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `t-${POOL_ID}` });
   return (
@@ -224,7 +234,7 @@ function PoolDroppable({
       ) : (
         <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {pool.map((v) => (
-            <VolunteerCard key={v.user_id} v={v} teamSlugById={teamSlugById} currentTeamId={null} />
+            <VolunteerCard key={v.user_id} v={v} teamSlugById={teamSlugById} currentTeamId={null} onInviteRequest={onInviteRequest} />
           ))}
         </div>
       )}
@@ -235,9 +245,11 @@ function PoolDroppable({
 function TeamColumn({
   team,
   teamSlugById,
+  onInviteRequest,
 }: {
   team: Team;
   teamSlugById: Map<string, string>;
+  onInviteRequest?: (email: string) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `t-${team.id}` });
   const filled = team.members.length;
@@ -285,6 +297,7 @@ function TeamColumn({
               teamSlugById={teamSlugById}
               currentTeamId={team.id}
               currentTeamSlug={team.slug}
+              onInviteRequest={onInviteRequest}
             />
           ))
         )}
@@ -298,11 +311,13 @@ function VolunteerCard({
   teamSlugById,
   currentTeamId,
   currentTeamSlug,
+  onInviteRequest,
 }: {
   v: Volunteer;
   teamSlugById: Map<string, string>;
   currentTeamId: string | null;
   currentTeamSlug?: string;
+  onInviteRequest?: (email: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `v-${v.user_id}`,
@@ -353,9 +368,18 @@ function VolunteerCard({
             {v.first_name ?? v.full_name}
             {v.is_returning && <span className="ml-1 text-amber-600" title="Bénévole fidèle">★</span>}
             {v.pending_account && (
-              <span className="ml-1 inline-block rounded bg-blue-100 px-1 text-[8px] font-bold text-blue-700" title="Compte pas encore créé — se connectera au 1er magic-link">
-                ⏳
-              </span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (v.email) onInviteRequest?.(v.email);
+                }}
+                className="ml-1 inline-block rounded bg-blue-100 px-1 text-[8px] font-bold text-blue-700 hover:bg-blue-200"
+                title="Compte pas encore créé — clique pour envoyer un magic-link à son email"
+              >
+                ⏳ Inviter
+              </button>
             )}
           </p>
           {v.email && (

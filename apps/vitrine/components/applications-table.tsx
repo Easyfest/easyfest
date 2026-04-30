@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 
-import { validateApplication, refuseApplication } from "@/app/actions/applications-admin";
+import { validateApplication, refuseApplication, inviteVolunteer } from "@/app/actions/applications-admin";
 
 interface Application {
   id: string;
@@ -22,6 +22,8 @@ interface Application {
   created_at: string;
   refusal_reason: string | null;
   source: string;
+  invited_at: string | null;
+  has_account: boolean;
 }
 
 const STATUSES = ["pending", "validated", "refused", "reserve", "pre_selected"] as const;
@@ -73,6 +75,17 @@ export function ApplicationsTable({
       setPendingId(null);
       setFeedback(res.ok ? "Candidature refusée" : `❌ ${res.error}`);
       setTimeout(() => setFeedback(null), 4000);
+    });
+  }
+
+  function invite(id: string, email: string) {
+    if (!confirm(`Envoyer un magic-link de connexion à ${email} ?`)) return;
+    setPendingId(id);
+    startTransition(async () => {
+      const res = await inviteVolunteer(id);
+      setPendingId(null);
+      setFeedback(res.ok ? `📧 Invitation envoyée à ${email}` : `❌ ${res.error}`);
+      setTimeout(() => setFeedback(null), 5000);
     });
   }
 
@@ -177,6 +190,39 @@ export function ApplicationsTable({
                           Refuser
                         </button>
                       </div>
+                    )}
+                    {a.status === "validated" && !a.has_account && (
+                      <div className="flex flex-col gap-1">
+                        {a.invited_at ? (
+                          <>
+                            <span className="rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700" title={`Invité le ${new Date(a.invited_at).toLocaleString("fr-FR")}`}>
+                              📧 Déjà invité·e
+                            </span>
+                            <button
+                              type="button"
+                              disabled={pendingId === a.id}
+                              onClick={() => invite(a.id, a.email)}
+                              className="rounded-lg border border-blue-200 bg-blue-50/50 px-2.5 py-1 text-[10px] font-medium text-blue-700 hover:bg-blue-100 disabled:opacity-50"
+                            >
+                              Renvoyer
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={pendingId === a.id}
+                            onClick={() => invite(a.id, a.email)}
+                            className="rounded-lg bg-brand-coral px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                          >
+                            {pendingId === a.id ? "…" : "📧 Inviter"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {a.status === "validated" && a.has_account && (
+                      <span className="text-xs text-emerald-700" title="Compte créé, peut se connecter">
+                        ✓ Connecté·e
+                      </span>
                     )}
                   </td>
                 </tr>

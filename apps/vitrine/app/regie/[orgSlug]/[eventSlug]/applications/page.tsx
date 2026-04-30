@@ -22,10 +22,22 @@ export default async function ApplicationsPage({ params }: PageProps) {
     .select(`
       id, status, full_name, first_name, last_name, email, phone, birth_date, is_minor,
       arrival_at, departure_at, preferred_position_slugs, skills, limitations,
-      created_at, refusal_reason, source, admin_notes
+      created_at, refusal_reason, source, admin_notes, invited_at
     `)
     .eq("event_id", ev.id)
     .order("created_at", { ascending: false });
+
+  // Récupérer les emails des comptes existants pour calculer has_account
+  const { data: profiles } = await supabase
+    .from("volunteer_profiles")
+    .select("email");
+  const accountEmails = new Set(
+    (profiles ?? []).map((p: any) => (p.email ?? "").toLowerCase()).filter(Boolean)
+  );
+  const enrichedApps = (applications ?? []).map((a: any) => ({
+    ...a,
+    has_account: accountEmails.has((a.email ?? "").toLowerCase()),
+  }));
 
   return (
     <div className="space-y-4">
@@ -36,7 +48,7 @@ export default async function ApplicationsPage({ params }: PageProps) {
         </p>
       </header>
 
-      <ApplicationsTable applications={applications ?? []} eventName={ev.name} />
+      <ApplicationsTable applications={enrichedApps} eventName={ev.name} />
     </div>
   );
 }
