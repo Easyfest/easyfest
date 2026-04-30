@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>Ta candidature est validée</title></head>
+<body style="font-family: -apple-system, system-ui, sans-serif; background: #FFF8F0; padding: 24px;">
+  <table role="presentation" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px;">
+    <tr><td style="padding: 32px;">
+      <p style="margin: 0; font-size: 11px; letter-spacing: 0.15em; color: #FF5E5B; font-weight: 600; text-transform: uppercase;">{{ .OrgName }}</p>
+      <h1 style="margin: 8px 0 16px; font-size: 24px; color: #1A1A1A;">C'est validé ! 🎉</h1>
+      <p style="font-size: 16px; color: #333; line-height: 1.6;">
+        Salut <strong>{{ .FirstName }}</strong>,<br><br>
+        Ton inscription en tant que bénévole pour <strong>{{ .EventName }}</strong> est validée.
+        L'équipe a hâte de te retrouver !
+      </p>
+      <h2 style="margin: 24px 0 8px; font-size: 16px; color: #1A1A1A;">Prochaines étapes</h2>
+      <ol style="font-size: 15px; color: #333; line-height: 1.8; padding-left: 20px;">
+        <li>Connecte-toi à ton espace via le bouton ci-dessous (magic-link)</li>
+        <li>Signe la convention de bénévolat (5 min)</li>
+        <li>Consulte ton planning quand il sera prêt</li>
+      </ol>
+      <p style="margin: 24px 0;">
+        <a href="{{ .LoginURL }}" style="display: inline-block; background: #FF5E5B; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 600; font-size: 16px;">
+          Accéder à mon espace bénévole
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #888; margin-top: 24px;">
+        Tu reçois ce mail parce que tu t'es inscrit·e via le formulaire {{ .EventName }}.
+        Une question ? Réponds directement à ce mail.
+      </p>
+    </td></tr>
+    <tr><td style="padding: 16px 32px; background: #FFF8F0; border-top: 1px solid #F0E8DC;">
+      <p style="margin: 0; font-size: 12px; color: #888;">
+        Easyfest x {{ .OrgName }} — l'app des assos et des festivals.
+      </p>
+    </td></tr>
+  </table>
+</body>
+</html>

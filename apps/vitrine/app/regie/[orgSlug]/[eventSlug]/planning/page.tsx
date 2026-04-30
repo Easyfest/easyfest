@@ -44,7 +44,7 @@ export default async function RegiePlanningPage({ params }: PageProps) {
   // 3. Récupérer les emails des users pour matcher avec volunteer_applications
   const { data: applications } = await supabase
     .from("volunteer_applications")
-    .select("email, preferred_position_slugs, bio, skills, limitations, arrival_at, departure_at, status")
+    .select("email, full_name, first_name, phone, avatar_url, preferred_position_slugs, bio, skills, limitations, arrival_at, departure_at, status")
     .eq("event_id", ev.id)
     .in("status", ["validated", "pending"]);
 
@@ -96,6 +96,7 @@ export default async function RegiePlanningPage({ params }: PageProps) {
       arrival_at: pref?.arrival_at ?? null,
       departure_at: pref?.departure_at ?? null,
       position_ids: positionIds as string[],
+      pending_account: false,
       assignments: myAssignments.map((a: any) => ({
         id: a.id,
         shift_id: a.shift_id,
@@ -106,6 +107,30 @@ export default async function RegiePlanningPage({ params }: PageProps) {
     };
   });
 
+  // 6b. Pré-bénévoles : applications validées qui n'ont pas encore de membership
+  // (= compte pas créé, ils se connecteront via magic-link plus tard)
+  const memberEmails = new Set((members ?? []).map((m: any) => (m.profile?.email ?? "").toLowerCase()).filter(Boolean));
+  const preVolunteers = (applications ?? [])
+    .filter((app: any) => app.status === "validated" && !memberEmails.has((app.email ?? "").toLowerCase()))
+    .map((app: any) => ({
+      user_id: `pre-${app.email}`,
+      full_name: app.full_name ?? app.email ?? "—",
+      first_name: app.first_name ?? null,
+      avatar_url: app.avatar_url ?? null,
+      phone: app.phone ?? null,
+      email: app.email ?? null,
+      is_returning: false,
+      preferred_slugs: app.preferred_position_slugs ?? [],
+      bio: app.bio ?? null,
+      arrival_at: app.arrival_at ?? null,
+      departure_at: app.departure_at ?? null,
+      position_ids: [] as string[],
+      pending_account: true,
+      assignments: [] as any[],
+    }));
+
+  const allVolunteers = [...volunteers, ...preVolunteers];
+
   // 7. Construire les équipes (positions) avec leurs bénévoles
   const teams = (positions ?? []).map((p: any) => ({
     id: p.id,
@@ -115,10 +140,10 @@ export default async function RegiePlanningPage({ params }: PageProps) {
     icon: p.icon,
     description: p.description,
     needs_count_default: p.needs_count_default,
-    members: volunteers.filter((v) => v.position_ids.includes(p.id)),
+    members: allVolunteers.filter((v) => v.position_ids.includes(p.id)),
   }));
 
-  const pool = volunteers.filter((v) => v.position_ids.length === 0);
+  const pool = allVolunteers.filter((v) => v.position_ids.length === 0);
 
   return (
     <div className="space-y-4">
@@ -132,6 +157,12 @@ export default async function RegiePlanningPage({ params }: PageProps) {
         </div>
         <div className="flex items-center gap-2 text-xs">
           <Link
+            href={`/regie/${orgSlug}/${eventSlug}/planning/timeline`}
+            className="rounded-lg border border-brand-ink/15 px-3 py-1.5 font-medium text-brand-ink/80 hover:bg-brand-ink/5"
+          >
+            📊 Timeline →
+          </Link>
+          <Link
             href={`/regie/${orgSlug}/${eventSlug}/planning/shifts`}
             className="rounded-lg border border-brand-ink/15 px-3 py-1.5 font-medium text-brand-ink/80 hover:bg-brand-ink/5"
           >
@@ -141,7 +172,7 @@ export default async function RegiePlanningPage({ params }: PageProps) {
       </header>
 
       <div className="flex gap-3 text-xs text-brand-ink/60">
-        <span><strong>{volunteers.length}</strong> bénévoles validés</span>
+        <span><strong>{allVolunteers.length}</strong> bénévoles ({preVolunteers.length} en attente compte)</span>
         <span>·</span>
         <span><strong>{pool.length}</strong> en attente d'équipe</span>
         <span>·</span>

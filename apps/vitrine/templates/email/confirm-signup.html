@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Bienvenue sur Easyfest</title>
+</head>
+<body style="font-family: -apple-system, system-ui, 'Segoe UI', sans-serif; background: #FFF8F0; margin: 0; padding: 24px;">
+  <table role="presentation" style="max-width: 480px; margin: 0 auto; background: #ffffff; border-radius: 16px; overflow: hidden;">
+    <tr>
+      <td style="padding: 32px;">
+        <p style="margin: 0; font-size: 11px; letter-spacing: 0.15em; color: #FF5E5B; font-weight: 600; text-transform: uppercase;">{{ .SiteName }}</p>
+        <h1 style="margin: 8px 0 0; font-size: 22px; color: #1A1A1A;">
+          Bienvenue dans l'aventure 🌿
+        </h1>
+        <p style="margin: 16px 0 0; font-size: 15px; color: #333; line-height: 1.6;">
+          Merci de rejoindre l'équipe ! Confirme ton email pour activer ton compte et accéder à ton espace bénévole.
+        </p>
+        <p style="margin: 24px 0 0;">
+          <a href="{{ .ConfirmationURL }}"
+             style="display: inline-block; background: #FF5E5B; color: #ffffff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 600;">
+            Confirmer mon email
+          </a>
+        </p>
+        <p style="margin: 24px 0 0; font-size: 13px; color: #888;">
+          Lien valable 24h. Si tu n'as pas créé ce compte, ignore ce mail.
+        </p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

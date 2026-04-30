@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><title>Réinitialiser ton mot de passe</title></head>
+<body style="font-family: -apple-system, system-ui, sans-serif; background: #FFF8F0; padding: 24px;">
+  <table role="presentation" style="max-width: 480px; margin: 0 auto; background: #fff; border-radius: 16px;">
+    <tr><td style="padding: 32px;">
+      <p style="margin: 0; font-size: 11px; letter-spacing: 0.15em; color: #FF5E5B; font-weight: 600; text-transform: uppercase;">{{ .SiteName }}</p>
+      <h1 style="margin: 8px 0 16px; font-size: 22px; color: #1A1A1A;">Nouveau mot de passe 🔑</h1>
+      <p style="font-size: 15px; color: #333; line-height: 1.6;">
+        Tu as demandé à réinitialiser ton mot de passe Easyfest. Clique ci-dessous pour en choisir un nouveau.
+      </p>
+      <p style="margin: 24px 0;">
+        <a href="{{ .ConfirmationURL }}" style="display: inline-block; background: #FF5E5B; color: #fff; text-decoration: none; padding: 14px 32px; border-radius: 12px; font-weight: 600;">
+          Choisir un nouveau mot de passe
+        </a>
+      </p>
+      <p style="font-size: 13px; color: #888;">Si tu n'as pas demandé ça, ignore ce mail. Lien valable 1h.</p>
+    </td></tr>
+  </table>
+</body>
+</html>

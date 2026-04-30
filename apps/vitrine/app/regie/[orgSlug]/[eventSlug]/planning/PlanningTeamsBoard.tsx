@@ -28,6 +28,7 @@ interface Volunteer {
   arrival_at: string | null;
   departure_at: string | null;
   position_ids: string[];
+  pending_account?: boolean;
   assignments: { id: string; shift_id: string; position_id: string; starts_at: string; ends_at: string }[];
 }
 
@@ -84,6 +85,13 @@ export function PlanningTeamsBoard({ initialTeams, initialPool, eventId }: Props
 
     const userId = String(active.id).replace(/^v-/, "");
     const targetTeamId = String(over.id).replace(/^t-/, "");
+
+    // Bloquer drag sur les pré-bénévoles (pas de vrai user_id)
+    if (userId.startsWith("pre-")) {
+      setFeedback("⏳ Compte pas encore créé — invite ce bénévole à se connecter d'abord");
+      setTimeout(() => setFeedback(null), 3500);
+      return;
+    }
 
     const found = findVolunteer(userId);
     if (!found) return;
@@ -316,10 +324,16 @@ function VolunteerCard({
       style={style}
       {...attributes}
       {...listeners}
-      className={`group cursor-grab rounded-lg border bg-white p-2 text-xs shadow-sm transition active:cursor-grabbing ${
+      className={`group rounded-lg border bg-white p-2 text-xs shadow-sm transition ${
+        v.pending_account
+          ? "cursor-not-allowed border-blue-200 bg-blue-50/30 opacity-80"
+          : "cursor-grab active:cursor-grabbing"
+      } ${
         isDragging
           ? "border-brand-coral shadow-glow ring-2 ring-brand-coral/30"
-          : "border-brand-ink/10 hover:border-brand-coral/40 hover:shadow"
+          : v.pending_account
+            ? ""
+            : "border-brand-ink/10 hover:border-brand-coral/40 hover:shadow"
       }`}
     >
       <div className="flex items-start gap-2">
@@ -338,6 +352,11 @@ function VolunteerCard({
           <p className="truncate font-semibold leading-tight">
             {v.first_name ?? v.full_name}
             {v.is_returning && <span className="ml-1 text-amber-600" title="Bénévole fidèle">★</span>}
+            {v.pending_account && (
+              <span className="ml-1 inline-block rounded bg-blue-100 px-1 text-[8px] font-bold text-blue-700" title="Compte pas encore créé — se connectera au 1er magic-link">
+                ⏳
+              </span>
+            )}
           </p>
           {v.email && (
             <p className="truncate text-[10px] text-brand-ink/50">{v.email}</p>
