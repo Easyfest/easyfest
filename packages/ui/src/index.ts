@@ -5,6 +5,7 @@ export { Badge } from "./components/badge";
 export { WellbeingPicker } from "./components/wellbeing-picker";
 export { SaferAlertButton } from "./components/safer-alert-button";
 export { RoleCard } from "./components/role-card";
+export { EmptyState } from "./components/empty-state";
 
 // Marketing sections (landing, pricing, case studies)
 export * from "./marketing";
