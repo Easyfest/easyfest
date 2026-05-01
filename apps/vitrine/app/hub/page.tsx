@@ -54,9 +54,14 @@ export default async function HubPage() {
           Tu n'as pas encore d'affectation active. L'équipe revient vers toi dès que ton
           rôle est confirmé.
         </p>
-        <form action="/auth/logout" method="post" className="mt-8">
-          <button className="text-sm text-brand-ink/60 underline">Se déconnecter</button>
-        </form>
+        <div className="mt-8 flex flex-col items-center gap-2">
+          <Link href="/account/privacy" className="text-sm text-brand-ink/60 underline">
+            Mes données et vie privée
+          </Link>
+          <form action="/auth/logout" method="post">
+            <button className="text-sm text-brand-ink/60 underline">Se déconnecter</button>
+          </form>
+        </div>
       </main>
     );
   }
@@ -108,9 +113,14 @@ export default async function HubPage() {
         })}
       </ul>
 
-      <form action="/auth/logout" method="post" className="mt-8 text-center">
-        <button className="text-sm text-brand-ink/60 underline">Se déconnecter</button>
-      </form>
+      <div className="mt-8 flex flex-col items-center gap-2 text-center">
+        <Link href="/account/privacy" className="text-sm text-brand-ink/60 underline">
+          Mes données et vie privée
+        </Link>
+        <form action="/auth/logout" method="post">
+          <button className="text-sm text-brand-ink/60 underline">Se déconnecter</button>
+        </form>
+      </div>
     </main>
   );
 }

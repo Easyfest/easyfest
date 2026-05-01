@@ -1,16 +1,35 @@
+import Link from "next/link";
+
 import { formatDateFr } from "@easyfest/shared";
 
 export const metadata = {
   title: "Politique de confidentialité",
 };
 
-export default function PrivacyPage() {
+export default function PrivacyPage({
+  searchParams,
+}: {
+  searchParams?: { account_deleted?: string };
+}) {
   const dpaDate = process.env["DPA_SIGNED_DATE"] ?? "2026-04-29";
   const purgeMonths = process.env["RGPD_PURGE_DELAY_MONTHS"] ?? "12";
   const subProcessorsUrl = process.env["DPA_SUB_PROCESSORS_URL"] ?? "/legal/sub-processors";
+  const showDeletionConfirmation = searchParams?.account_deleted === "1";
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-12 prose prose-sm">
+      {showDeletionConfirmation && (
+        <div
+          role="status"
+          className="not-prose mb-6 rounded-2xl border border-emerald-300 bg-emerald-50 p-4 text-sm"
+        >
+          <p className="font-medium text-brand-ink">Demande de suppression enregistrée</p>
+          <p className="mt-1 text-brand-ink/70">
+            Ton compte sera définitivement supprimé dans 30 jours. Tu peux te reconnecter avant cette
+            date pour annuler.
+          </p>
+        </div>
+      )}
       <h1 className="font-display text-3xl font-bold">Politique de confidentialité</h1>
       <p className="text-sm text-brand-ink/60">Version 1.0.0 · DPA signé le {formatDateFr(dpaDate)}</p>
 
@@ -65,9 +84,19 @@ export default function PrivacyPage() {
       <h2>Tes droits</h2>
       <p>
         Tu peux exercer à tout moment : droit d'accès, rectification, effacement, portabilité,
-        opposition. Envoie un mail à{" "}
-        <a href="mailto:dpo@easyfest.app">dpo@easyfest.app</a> avec une pièce d'identité.
+        opposition.
       </p>
+      <ul>
+        <li>
+          <strong>Auto-service</strong> (Art.15 et Art.17) :{" "}
+          <Link href="/account/privacy">/account/privacy</Link> — télécharge tes données ou
+          déclenche une suppression (fenêtre de récupération de 30 jours).
+        </li>
+        <li>
+          <strong>Par mail</strong> : <a href="mailto:dpo@easyfest.app">dpo@easyfest.app</a> avec une
+          pièce d'identité (réponse sous 1 mois max).
+        </li>
+      </ul>
 
       <h2>Mineurs</h2>
       <p>
