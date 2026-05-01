@@ -4,7 +4,9 @@ import {
   closestCenter,
   DndContext,
   KeyboardSensor,
+  MouseSensor,
   PointerSensor,
+  TouchSensor,
   useDroppable,
   useSensor,
   useSensors,
@@ -65,8 +67,14 @@ export function PlanningTeamsBoard({ initialTeams, initialPool, eventId }: Props
     setTimeout(() => setFeedback(null), 6000);
   };
 
+  // Sensors : on active à 3px (au lieu de 6) pour être plus réactif en desktop.
+  // MouseSensor + TouchSensor sont des fallbacks explicites pour les navigateurs où
+  // PointerEvents seuls ne suffisent pas (Firefox sur certains setups, iOS Safari).
+  // Tolerance/delay pour TouchSensor pour éviter les drags accidentels au scroll.
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
     useSensor(KeyboardSensor),
   );
 
