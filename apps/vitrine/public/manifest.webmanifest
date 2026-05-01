@@ -1,0 +1,26 @@
+{
+  "name": "Easyfest — Le festival pro",
+  "short_name": "Easyfest",
+  "description": "Outil de gestion pour festivals associatifs : bénévoles, planning, sponsors, conventions.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF8F0",
+  "theme_color": "#FF5E5B",
+  "icons": [
+    {
+      "src": "/brand/icons/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/brand/icons/apple-touch-icon.svg",
+      "sizes": "180x180",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "lang": "fr-FR",
+  "dir": "ltr",
+  "categories": ["business", "productivity", "events"]
+}

@@ -1,5 +1,14 @@
 import Link from "next/link";
 
+import {
+  TrustSignals,
+  ProblemSolution,
+  TestimonialPam,
+  FAQSection,
+  CTASection,
+  DEFAULT_FAQ,
+} from "@easyfest/ui";
+
 import { SiteFooter, SiteHeader } from "@/components/site-header";
 
 export const dynamic = "force-dynamic";
@@ -13,20 +22,12 @@ const FEATURES = [
   { icon: "💰", title: "Pricing par édition", description: "Pas d'abonnement à l'année. Free pour 50 bénévoles. À partir de 49 €/édition." },
 ];
 
-const COMPARISON: Array<[string, string]> = [
-  ["✅ 1 outil unique", "❌ 5+ outils dispersés"],
-  ["✅ Bénévoles-first (mobile)", "❌ Conçu pour les gros festivals"],
-  ["✅ Moins de 200€/édition", "❌ Pourcentage billetterie + per user"],
-  ["✅ PWA + APK Android", "❌ Web only ou app payante"],
-  ["✅ Safer Space natif", "❌ Pas géré"],
-  ["✅ RGPD by design EU", "❌ Conformité à reconstituer"],
-];
-
 export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
 
+      {/* HERO existant — gardé tel quel */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-cream via-brand-cream to-brand-sand/40" aria-hidden />
         <div className="absolute right-0 top-0 -z-10 h-96 w-96 rounded-full bg-brand-coral/10 blur-3xl" aria-hidden />
@@ -50,8 +51,8 @@ export default function HomePage() {
             </p>
 
             <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-              <Link href="/icmpaca/rdl-2026/inscription" className="rounded-xl bg-brand-coral px-7 py-3.5 text-base font-medium text-white shadow-soft transition hover:opacity-90 hover:shadow-glow">
-                Devenir bénévole RDL 2026 →
+              <Link href="/commencer" className="rounded-xl bg-brand-coral px-7 py-3.5 text-base font-medium text-white shadow-soft transition hover:opacity-90 hover:shadow-glow">
+                Commencer gratuitement →
               </Link>
               <Link href="/icmpaca" className="rounded-xl border border-brand-ink/15 bg-white/70 px-7 py-3.5 text-base font-medium text-brand-ink backdrop-blur transition hover:bg-white">
                 Découvrir les festivals
@@ -65,6 +66,36 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* TrustSignals — chiffres clés */}
+      <TrustSignals
+        metrics={[
+          { value: "82", label: "bénévoles gérés" },
+          { value: "100%", label: "RGPD-compliant" },
+          { value: "EU", label: "données hébergées" },
+          { value: "30s", label: "pour signer une convention" },
+        ]}
+        partners={["ZIK en PACA", "Mairie de Montauroux", "Brasserie de la Côte"]}
+      />
+
+      {/* ProblemSolution — avant/après */}
+      <ProblemSolution
+        problemTitle="Aujourd'hui, organiser un festival, c'est..."
+        problems={[
+          { emoji: "📊", text: "Un Excel partagé qui se casse à chaque modif" },
+          { emoji: "💬", text: "5 groupes WhatsApp qui se contredisent" },
+          { emoji: "📂", text: "Un Drive avec 14 versions du planning" },
+          { emoji: "📧", text: "Des inscriptions qui se perdent dans les mails" },
+        ]}
+        solutionTitle="Avec Easyfest, c'est..."
+        solutions={[
+          { emoji: "🎟️", text: "Un dashboard unique pour tes bénévoles" },
+          { emoji: "📱", text: "Une app que chaque rôle utilise (régie, scan, équipe)" },
+          { emoji: "✓", text: "1 source de vérité, 0 conflits, RGPD-clean" },
+          { emoji: "📦", text: "Pack préfecture en 1 clic, plus 3 jours de paperasse" },
+        ]}
+      />
+
+      {/* Features grid — gardé avec les 6 features existantes */}
       <section className="bg-white/40 py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="mb-12 text-center">
@@ -85,39 +116,33 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="py-20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <div className="mb-10 text-center">
-            <p className="text-sm font-semibold uppercase tracking-widest text-brand-coral">Pourquoi pas Weezevent ?</p>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">Easyfest vs. les solutions pro</h2>
-          </div>
+      {/* Testimonial Pam */}
+      <TestimonialPam
+        authorName="Pamela Giordanengo"
+        authorRole="Présidente"
+        authorOrg="ZIK en PACA · Roots du Lac"
+        quote="On gérait nos 51 bénévoles avec un Excel et 3 WhatsApp. Easyfest a remplacé ça en 30 minutes. Le moment où mes bénévoles ont signé leur convention en 1 clic, j'ai compris."
+        stats={[
+          { before: "5h", after: "30 min", label: "pour gérer les inscriptions" },
+          { before: "3 outils", after: "1 outil", label: "pour tout coordonner" },
+          { before: "0%", after: "100%", label: "conventions signées tracées" },
+        ]}
+      />
 
-          <div className="overflow-hidden rounded-2xl border border-brand-ink/10 bg-white shadow-soft">
-            <div className="grid grid-cols-2 border-b border-brand-ink/10 bg-brand-ink/5 text-sm font-semibold">
-              <div className="p-4 text-center">Easyfest</div>
-              <div className="p-4 text-center text-brand-ink/60">Outils pro classiques</div>
-            </div>
-            {COMPARISON.map((row, i) => (
-              <div key={i} className="grid grid-cols-2 border-b border-brand-ink/5 last:border-b-0">
-                <div className="p-4 text-sm">{row[0]}</div>
-                <div className="p-4 text-sm text-brand-ink/60">{row[1]}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      {/* FAQ */}
+      <FAQSection
+        title="Tu te poses ces questions ?"
+        items={DEFAULT_FAQ}
+      />
 
-      <section className="py-20">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <div className="overflow-hidden rounded-3xl bg-brand-ink px-8 py-16 text-center text-white shadow-soft">
-            <h2 className="font-display text-3xl font-bold md:text-4xl">Tu organises un festival ?</h2>
-            <p className="mx-auto mt-4 max-w-xl text-white/70">Rejoins notre Field Test 0.0.1 — accompagnement direct par notre équipe pour ta prochaine édition.</p>
-            <Link href="mailto:hello@easyfest.app?subject=Beta Easyfest pour mon festival" className="mt-8 inline-block rounded-xl bg-brand-coral px-7 py-3.5 font-medium shadow-soft transition hover:opacity-90">
-              Discuter avec l'équipe
-            </Link>
-          </div>
-        </div>
-      </section>
+      {/* CTA final */}
+      <CTASection
+        title="Prêt·e à organiser ton festival sans stresser ?"
+        subtitle="Compte gratuit en 30 secondes. Aucune carte bleue requise."
+        primaryCta={{ label: "Commencer gratuitement", href: "/commencer" }}
+        secondaryCta={{ label: "Voir les tarifs", href: "/pricing" }}
+        variant="coral"
+      />
 
       <SiteFooter />
     </div>
