@@ -17,6 +17,7 @@ export const dynamic = "force-dynamic";
  * Réservé direction de l'event.
  */
 export async function GET(req: Request) {
+  try {
   const url = new URL(req.url);
   const eventId = url.searchParams.get("eventId");
   if (!eventId) return NextResponse.json({ error: "eventId manquant" }, { status: 400 });
@@ -25,16 +26,17 @@ export async function GET(req: Request) {
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
 
-  // Permission direction
-  const { data: membership } = await supabase
+  // Permission direction — utilise array (l'user peut avoir N rôles sur le même event,
+  // .maybeSingle() throwait silencieusement si N>1).
+  const { data: memberships } = await supabase
     .from("memberships")
     .select("role")
     .eq("user_id", userData.user.id)
     .eq("event_id", eventId)
-    .eq("is_active", true)
-    .maybeSingle();
+    .eq("is_active", true);
 
-  if (!membership || membership.role !== "direction") {
+  const isDirection = (memberships ?? []).some((m: any) => m.role === "direction");
+  if (!isDirection) {
     return NextResponse.json({ error: "Réservé à la direction" }, { status: 403 });
   }
 
@@ -240,6 +242,15 @@ après usage. Ne le diffuse pas par email non chiffré.
       "Content-Type": "application/zip",
       "Content-Disposition": `attachment; filename="${filename}"`,
       "Content-Length": String(blob.length),
+      "Cache-Control": "no-store",
     },
   });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error("[prefecture-export] error:", err);
+    return NextResponse.json(
+      { error: (err as Error).message ?? "Export impossible" },
+      { status: 500 },
+    );
+  }
 }
