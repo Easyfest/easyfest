@@ -9,8 +9,9 @@ create table public.volunteer_profiles (
   first_name           text,
   last_name            text,
   birth_date           date,
-  is_minor             boolean generated always as
-                       (birth_date > current_date - interval '18 years') stored,
+  -- is_minor : calculé via trigger (cf. tg_volunteer_profiles_is_minor ci-dessous).
+  -- Pas en GENERATED STORED car current_date n'est pas IMMUTABLE (refusé en PG15+).
+  is_minor             boolean default false,
   gender               text check (gender in ('M','F','X','NS')),
   phone                text,
   email                citext,
@@ -44,6 +45,21 @@ create table public.volunteer_profiles (
 create trigger tg_volunteer_profiles_updated_at
   before update on public.volunteer_profiles
   for each row execute function public.tg_set_updated_at();
+
+-- Trigger is_minor : équivalent au GENERATED ALWAYS AS, mais utilisable car
+-- contourne la contrainte d'immutabilité de current_date en PG15+.
+create or replace function public.tg_compute_is_minor()
+returns trigger language plpgsql as $$
+begin
+  new.is_minor := new.birth_date is not null
+                  and new.birth_date > current_date - interval '18 years';
+  return new;
+end;
+$$;
+
+create trigger tg_volunteer_profiles_is_minor
+  before insert or update of birth_date on public.volunteer_profiles
+  for each row execute function public.tg_compute_is_minor();
 
 create index idx_volunteer_profiles_email on public.volunteer_profiles(lower(email::text));
 

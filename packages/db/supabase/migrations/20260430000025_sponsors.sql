@@ -2,13 +2,23 @@
 -- SPONSORS CRM (Roots du Lac & festivals en général)
 -- ====================================================================
 
-create type if not exists public.sponsor_status as enum (
-  'prospect', 'in_discussion', 'pending_signature', 'signed', 'paid', 'cancelled'
-);
+-- CREATE TYPE IF NOT EXISTS n'est pas supporté pour les ENUM en Postgres.
+-- On encapsule dans un DO block + EXCEPTION pour idempotence.
+do $$
+begin
+  create type public.sponsor_status as enum (
+    'prospect', 'in_discussion', 'pending_signature', 'signed', 'paid', 'cancelled'
+  );
+exception when duplicate_object then null;
+end$$;
 
-create type if not exists public.sponsor_tier as enum (
-  'bronze', 'silver', 'gold', 'platinum', 'partner'
-);
+do $$
+begin
+  create type public.sponsor_tier as enum (
+    'bronze', 'silver', 'gold', 'platinum', 'partner'
+  );
+exception when duplicate_object then null;
+end$$;
 
 create table if not exists public.sponsors (
   id              uuid primary key default gen_random_uuid(),
