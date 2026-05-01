@@ -21,7 +21,7 @@
 
 - **Priorité** : P0
 - **Estimation** : 1.5 j
-- **Statut** : À faire
+- **Statut** : ✅ **Fait** (commit `cbd245a`, 2026-05-01) — version JSON unique. Voir OC-04bis pour ZIP/email/restore-by-token.
 - **Deps** : aucune (Supabase + helpers déjà en place)
 
 ### Contexte
@@ -94,7 +94,9 @@ apps/vitrine/e2e/rgpd.spec.ts                                                  [
 
 - **Priorité** : P0
 - **Estimation** : 2 j
-- **Statut** : À faire
+- **Statut** : ✅ **Fait** (commit `20820b7`, 2026-05-01)
+- **Route canonique** : `/commencer` (FR — SEO + cohérence landing). `/onboarding` redirige 308.
+- **Server actions** : `apps/vitrine/app/actions/org-creation.ts` (distinct de `actions/onboard.ts` = auto-upgrade bénévole).
 - **Deps** : aucune (RLS `events_insert_authenticated` + `memberships_insert_lead` déjà en place ; on ajoute une exception `direction` auto-créée pour le créateur de l'org)
 
 ### Contexte
@@ -153,6 +155,58 @@ apps/vitrine/e2e/onboarding.spec.ts                                            [
 - `bootstrap_org_for_user` doit créer le `direction` membership en bypassant la policy `memberships_insert_lead` (qui exige déjà un `volunteer_lead+`) → security definer obligatoire.
 - Slug org/event : collision possible. Validation server-side avec retry suggestion (`-2`, `-3`, …) plutôt que erreur dure.
 - Les invitations équipe doivent être idempotentes (même email invité 2x = 1 seul membership).
+
+---
+
+## OC-04bis — Export ZIP + mail "tu as 30j" + restore-by-token signé
+
+- **Priorité** : P1
+- **Estimation** : 0.5–1 j
+- **Statut** : À faire — **avant V1 GA juin 2026** (pas critique pour la démo Pam dimanche)
+- **Deps** : OC-04+05 livré (commit `cbd245a`)
+
+### Contexte
+
+OC-04+05 livre un export Art.15 en JSON unique et un soft-delete sans email. Pour la V1 GA, l'expérience utilisateur attendue est plus aboutie :
+
+1. **Export = ZIP** avec `profile.json`, `applications.json`, `photos/avatar.{jpg,png}` (binaires depuis Supabase Storage).
+2. **Mail post-suppression** "tu as 30 jours pour annuler" avec lien restore signé.
+3. **Restore-by-token URL-able** depuis le mail (pas seulement bouton UI sur `/account/privacy`).
+
+### Acceptance criteria
+
+- [ ] Dépendance `jszip` ajoutée à `apps/vitrine/package.json`.
+- [ ] Route `/api/account/export` mise à jour :
+  - retourne `Content-Type: application/zip`, `Content-Disposition: attachment; filename="easyfest-export-{userId}-{date}.zip"`
+  - structure : `profile.json`, `applications.json`, `memberships.json`, `assignments.json`, `signed_engagements.json`, `notification_log.json`, `photos/avatar.<ext>` (téléchargé depuis bucket `avatars` Supabase Storage)
+  - le bandeau "Art.15" du JSON principal explique la structure du ZIP.
+- [ ] Token restore signé :
+  - migration `0030_rgpd_restore_tokens.sql` : table `rgpd_restore_tokens (token text primary key, user_id uuid, expires_at timestamptz, used_at timestamptz null)`
+  - server action génère un token `crypto.randomUUID()` lors de `/api/account/delete`, stocké avec `expires_at = deleted_at` (= now + 30j)
+- [ ] Mail Resend post-delete :
+  - template HTML simple : titre "Ton compte sera supprimé le {date}", paragraphe avec lien `https://easyfest.app/account/restore?token={token}`, signature DPO
+  - envoyé en bg de `/api/account/delete` (best-effort, non bloquant pour le sign-out)
+- [ ] Route `GET /account/restore?token=X` :
+  - vérifie token valide (existe, pas expiré, pas déjà utilisé)
+  - appelle `rgpd_restore_self()` (RPC existante)
+  - marque token `used_at = now()` (anti-rejouage)
+  - redirect `/auth/login?restored=1` avec bandeau de confirmation à la connexion suivante
+- [ ] E2E `e2e/rgpd.spec.ts` étendu :
+  - export retourne `application/zip`
+  - body est un ZIP valide (signature `PK\x03\x04`)
+  - `/account/restore?token=invalid` renvoie page d'erreur claire
+
+### Fichiers touchés / créés
+
+```
+packages/db/supabase/migrations/20260615000010_rgpd_restore_tokens.sql        [CREATE]
+apps/vitrine/app/api/account/export/route.ts                                  [REWRITE — ZIP au lieu de JSON]
+apps/vitrine/app/api/account/delete/route.ts                                  [EDIT — génère token + envoie mail]
+apps/vitrine/app/account/restore/route.ts                                     [CREATE — handler GET token]
+apps/vitrine/lib/email/account-deletion-template.tsx                          [CREATE — template Resend]
+apps/vitrine/package.json                                                     [EDIT — +jszip]
+apps/vitrine/e2e/rgpd.spec.ts                                                 [EDIT — assertions ZIP + token]
+```
 
 ---
 
@@ -345,13 +399,13 @@ apps/vitrine/app/page.tsx                                                      [
 
 Les 3 P0 dans l'ordre :
 
-1. **OC-04 + OC-05** RGPD (1.5 j) — base technique posée, RLS connue, edge function pattern existe.
-2. **OC-01** Onboarding (2 j) — pas de dépendance vers OC-04+05 mais bénéficie du contexte serveur posé.
-3. **OC-06 + OC-07** Tests + CI (1.5 j) — couvre les 2 OC précédents (`rgpd.spec.ts`, `onboarding.spec.ts`).
+1. ✅ **OC-04 + OC-05** RGPD — livré commit `cbd245a` (version JSON, OC-04bis traite ZIP+mail+restore-by-token)
+2. ✅ **OC-01** Onboarding — livré commit `20820b7`, route `/commencer` canonique
+3. ⏳ **OC-06 + OC-07** Tests + CI — scaffolded, attend feu vert après tests fumée manuels
 
-Total P0 : **5 j**.
+Total P0 livré : **3.5 j** (OC-04+05 + OC-01). Reste OC-06+07 : 1.5 j.
 
-Les P1/P2 (OC-08, OC-14, OC-11) restent à programmer après J3.
+Backlog P1/P2 : **OC-04bis** (V1 GA juin 2026), OC-08 Artistes, OC-14 Cmd+K, OC-11 Témoignage Pam.
 
 ---
 
