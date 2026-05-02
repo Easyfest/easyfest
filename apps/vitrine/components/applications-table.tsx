@@ -28,6 +28,15 @@ interface Application {
 
 const STATUSES = ["pending", "validated", "refused", "reserve", "pre_selected"] as const;
 
+const STATUS_LABELS_FR: Record<string, string> = {
+  all: "Toutes",
+  pending: "En attente",
+  validated: "Validé",
+  refused: "Refusé",
+  reserve: "Réserve",
+  pre_selected: "Pré-sélectionné",
+};
+
 export function ApplicationsTable({
   applications,
   eventName,
@@ -102,7 +111,7 @@ export function ApplicationsTable({
                 filter === s ? "bg-white shadow-soft" : "text-brand-ink/60"
               }`}
             >
-              {s === "all" ? "Toutes" : s}
+              {STATUS_LABELS_FR[s] ?? s}
               {s !== "all" && (
                 <span className="ml-1 text-brand-ink/50">
                   ({applications.filter((a) => a.status === s).length})
