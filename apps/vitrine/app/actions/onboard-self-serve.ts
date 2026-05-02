@@ -35,6 +35,36 @@ const SLUG_PATTERN = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])?$/;
 const EMAIL_PATTERN = /^\S+@\S+\.\S+$/;
 const RATE_LIMIT_PER_HOUR = 5;
 
+// Hard limits chars (anti-DOS payload géant + cohérence avec validation côté DB).
+const LIMITS = {
+  firstName: 80,
+  lastName: 80,
+  email: 200,
+  phone: 30,
+  orgName: 150,
+  orgSlug: 64,
+  orgSiret: 14,
+  orgAddress: 250,
+  orgPresident: 100,
+  eventName: 150,
+  eventSlug: 64,
+  eventLocation: 200,
+  eventType: 50,
+  templateSlug: 64,
+} as const;
+
+// Pattern de détection XSS basique (rejet immédiat avant DB).
+// Server actions Next.js sont normalement protégées par origin/host check, mais defense-in-depth.
+const XSS_TAGS = /<\s*(script|iframe|object|embed|link|meta|style|svg)\b/i;
+
+function looksLikeXss(s: string | null | undefined): boolean {
+  if (!s) return false;
+  if (XSS_TAGS.test(s)) return true;
+  if (/javascript:/i.test(s)) return true;
+  if (/\bon\w+\s*=/i.test(s)) return true; // onclick=, onerror=, etc.
+  return false;
+}
+
 function getClientIp(): string {
   // Inspecte les headers Vercel/Cloudflare
   const h = headers();
@@ -47,23 +77,56 @@ function getClientIp(): string {
 }
 
 function validateInput(input: SubmitInput): string | null {
-  if (!input.firstName.trim()) return "Prénom requis";
+  // 1. Required + length cap (anti-DOS payload géant)
+  if (!input.firstName?.trim()) return "Prénom requis";
+  if (input.firstName.length > LIMITS.firstName) return "Prénom trop long";
+  if ((input.lastName ?? "").length > LIMITS.lastName) return "Nom trop long";
   if (!EMAIL_PATTERN.test(input.email)) return "Email invalide";
-  if (!SLUG_PATTERN.test(input.orgSlug)) {
+  if (input.email.length > LIMITS.email) return "Email trop long";
+  if ((input.phone ?? "").length > LIMITS.phone) return "Téléphone trop long";
+
+  if (!SLUG_PATTERN.test(input.orgSlug) || input.orgSlug.length > LIMITS.orgSlug) {
     return "Identifiant URL d'asso invalide (lettres minuscules, chiffres, tirets)";
   }
-  if (!SLUG_PATTERN.test(input.eventSlug)) {
+  if (!SLUG_PATTERN.test(input.eventSlug) || input.eventSlug.length > LIMITS.eventSlug) {
     return "Identifiant URL de festival invalide";
   }
-  if (!input.orgName.trim()) return "Nom d'asso requis";
-  if (!input.eventName.trim()) return "Nom de festival requis";
-  if (!input.eventLocation.trim()) return "Lieu requis";
+  if (!input.orgName?.trim()) return "Nom d'asso requis";
+  if (input.orgName.length > LIMITS.orgName) return "Nom d'asso trop long";
+  if ((input.orgSiret ?? "").length > LIMITS.orgSiret) return "SIRET invalide";
+  if ((input.orgAddress ?? "").length > LIMITS.orgAddress) return "Adresse trop longue";
+  if ((input.orgPresident ?? "").length > LIMITS.orgPresident) return "Nom président trop long";
+  if (!input.eventName?.trim()) return "Nom de festival requis";
+  if (input.eventName.length > LIMITS.eventName) return "Nom de festival trop long";
+  if (!input.eventLocation?.trim()) return "Lieu requis";
+  if (input.eventLocation.length > LIMITS.eventLocation) return "Lieu trop long";
 
+  // 2. XSS basique : rejet hard si tags exécutables ou handlers JS détectés.
+  // Defense-in-depth, en plus de l'échappement React côté affichage.
+  const fields = [
+    input.firstName, input.lastName, input.email, input.phone,
+    input.orgName, input.orgAddress, input.orgPresident,
+    input.eventName, input.eventLocation,
+  ];
+  if (fields.some(looksLikeXss)) {
+    return "Caractères non autorisés détectés dans un champ (HTML/JS)";
+  }
+
+  // 3. Dates cohérentes
   const startMs = Date.parse(input.eventStartsAt);
   const endMs = Date.parse(input.eventEndsAt);
   if (Number.isNaN(startMs) || Number.isNaN(endMs)) return "Dates invalides";
   if (endMs <= startMs) return "La date de fin doit être après la date de début";
+  // Limite 5 ans dans le futur (anti-spam et anti-typo)
+  const fiveYearsMs = 5 * 365 * 24 * 60 * 60 * 1000;
+  if (startMs > Date.now() + fiveYearsMs) return "Date de début trop éloignée (> 5 ans)";
 
+  // 4. Capacity sanity
+  if (input.eventCapacity !== null && (input.eventCapacity < 0 || input.eventCapacity > 1_000_000)) {
+    return "Capacité invalide (entre 0 et 1 000 000)";
+  }
+
+  // 5. Consents obligatoires
   if (!input.consentCgu || !input.consentRgpd) return "Consentements CGU + RGPD obligatoires";
   return null;
 }
