@@ -1,6 +1,7 @@
 "use client";
 
 import { useDraggable } from "@dnd-kit/core";
+import { useCallback } from "react";
 
 import { useAssign } from "@/components/AssignContext";
 import { useLongPress } from "@/hooks/useLongPress";
@@ -30,25 +31,51 @@ export function PlanningVolunteerCard({ v, currentTeamId, currentTeamSlug }: Pro
     disabled: v.pending_account,
   });
 
-  const longPress = useLongPress(
-    () => {
-      if (v.pending_account) {
-        if (v.email) onInviteRequest?.(v.email);
-        return;
+  // Trigger commun pour tap mobile + long-press desktop
+  const triggerMenu = useCallback(() => {
+    if (v.pending_account) {
+      if (v.email) onInviteRequest?.(v.email);
+      return;
+    }
+    openMenu(
+      {
+        user_id: v.user_id,
+        full_name: v.full_name,
+        first_name: v.first_name,
+        email: v.email,
+        pending_account: v.pending_account,
+        preferred_slugs: v.preferred_slugs,
+      },
+      currentTeamId,
+    );
+  }, [
+    currentTeamId,
+    onInviteRequest,
+    openMenu,
+    v.email,
+    v.first_name,
+    v.full_name,
+    v.pending_account,
+    v.preferred_slugs,
+    v.user_id,
+  ]);
+
+  const longPress = useLongPress(triggerMenu, { delay: 250, tolerance: 12 });
+
+  // Tap mobile : sur touch device (coarse pointer), un clic court ouvre directement le menu
+  // (plus rapide que long-press 250ms, et ergonomique sur smartphone). Sur desktop (fine pointer),
+  // le clic court ne déclenche rien — c'est le drag ou le long-press/clic droit qui agit.
+  const handleClick = useCallback(
+    (e: React.MouseEvent) => {
+      if (isDragging) return;
+      if (typeof window === "undefined") return;
+      if (window.matchMedia?.("(pointer: coarse)").matches) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerMenu();
       }
-      openMenu(
-        {
-          user_id: v.user_id,
-          full_name: v.full_name,
-          first_name: v.first_name,
-          email: v.email,
-          pending_account: v.pending_account,
-          preferred_slugs: v.preferred_slugs,
-        },
-        currentTeamId,
-      );
     },
-    { delay: 250, tolerance: 12 },
+    [isDragging, triggerMenu],
   );
 
   const style = transform
@@ -67,6 +94,10 @@ export function PlanningVolunteerCard({ v, currentTeamId, currentTeamSlug }: Pro
       {...attributes}
       {...listeners}
       {...longPress.handlers}
+      onClick={handleClick}
+      role="button"
+      tabIndex={0}
+      aria-label={`Bénévole ${v.full_name}. Touche pour assigner.`}
       className={`group relative rounded-lg border bg-white p-2 text-xs shadow-sm transition select-none ${
         v.pending_account
           ? "cursor-not-allowed border-blue-200 bg-blue-50/30 opacity-80"

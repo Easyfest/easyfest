@@ -17,6 +17,7 @@ import { assignVolunteerToTeam } from "@/app/actions/planning";
 import { AssignProvider, type AssignVolunteerSummary } from "@/components/AssignContext";
 import { VolunteerAssignMenu } from "@/components/VolunteerAssignMenu";
 
+import { PlanningChipsBar } from "./PlanningChipsBar";
 import {
   POOL_ID,
   PlanningPool,
@@ -228,13 +229,36 @@ export function PlanningTeamsBoard({
     [assignOptimistic, handleInviteRequest, openMenu, teams],
   );
 
+  // Construit la liste compacte pour le PlanningChipsBar mobile.
+  const chipsTeams = useMemo(
+    () =>
+      filteredTeams.map((t) => ({
+        id: t.id,
+        slug: t.slug,
+        name: t.name,
+        color: t.color,
+        icon: t.icon,
+        membersCount: t.members.length,
+        needs: t.needs_count_default ?? 0,
+      })),
+    [filteredTeams],
+  );
+
   return (
     <AssignProvider value={assignContextValue}>
       <div className="space-y-4">
+        {/* Hint UX adaptatif : message différent selon device */}
         <div className="rounded-lg border border-[var(--theme-primary,_#FF5E5B)]/30 bg-[var(--theme-primary,_#FF5E5B)]/5 px-3 py-2 text-xs text-brand-ink/75">
-          💡 <strong>2 façons d&apos;assigner</strong> : glisse-dépose une carte vers une équipe,
-          OU appui long sur une carte (clic droit sur PC) pour ouvrir le menu équipes.
+          <span className="md:hidden">
+            💡 <strong>Sur mobile</strong> : touche un bénévole pour l&apos;assigner à une équipe (chips
+            sticky en haut), ou appui long pour glisser-déposer.
+          </span>
+          <span className="hidden md:inline">
+            💡 <strong>Sur ordinateur</strong> : glisse-dépose une carte vers une équipe, ou clic droit / appui
+            long sur une carte pour ouvrir le menu équipes.
+          </span>
         </div>
+
         <div className="flex flex-wrap items-center justify-between gap-3">
           <input
             type="text"
@@ -267,8 +291,13 @@ export function PlanningTeamsBoard({
           collisionDetection={closestCenter}
           onDragEnd={handleDragEnd}
         >
+          {/* Sticky chips bar mobile-only — drop targets équipes en haut, pool drag-up vers ici */}
+          <PlanningChipsBar teams={chipsTeams} highlightId={highlightTeamSlug ?? null} />
+
           <PlanningPool pool={filteredPool} totalPool={pool.length} />
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+          {/* Grid colonnes équipes : visible desktop uniquement (md+), masqué mobile (chips suffisent) */}
+          <div className="hidden gap-4 md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredTeams.map((team) => (
               <PlanningTeamColumn key={team.id} team={team} />
             ))}
