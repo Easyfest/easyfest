@@ -1,10 +1,20 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 
 import { slugify } from "@easyfest/shared";
 
 import { submitFestivalRequest } from "@/app/actions/onboard-self-serve";
+
+/**
+ * Génère un challenge mathématique simple (anti-bot).
+ * On utilise des nombres entre 1-9 pour qu'un humain résolve facilement.
+ */
+function generateMathChallenge(): { a: number; b: number; expected: number } {
+  const a = 1 + Math.floor(Math.random() * 9);
+  const b = 1 + Math.floor(Math.random() * 9);
+  return { a, b, expected: a + b };
+}
 
 interface FormState {
   firstName: string;
@@ -65,6 +75,16 @@ export function FestivalRequestForm() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  // Anti-bot defenses
+  const [hpWebsite, setHpWebsite] = useState(""); // honeypot — doit rester vide
+  const [hpMathAnswer, setHpMathAnswer] = useState("");
+  const mathChallenge = useRef(generateMathChallenge());
+  const formOpenedAt = useRef<number>(typeof window !== "undefined" ? Date.now() : 0);
+  useEffect(() => {
+    // S'assurer que le timestamp est correct côté client (re-init si nécessaire)
+    if (formOpenedAt.current === 0) formOpenedAt.current = Date.now();
+  }, []);
+
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
@@ -80,14 +100,17 @@ export function FestivalRequestForm() {
   }
 
   const stepValidations: boolean[] = useMemo(() => {
+    const mathOk =
+      hpMathAnswer.trim() !== "" &&
+      Number.parseInt(hpMathAnswer.trim(), 10) === mathChallenge.current.expected;
     return [
       Boolean(form.firstName.trim()) && /\S+@\S+\.\S+/.test(form.email),
       Boolean(form.orgName.trim()) && Boolean(form.orgSlug.trim()),
       Boolean(form.eventName.trim()) && Boolean(form.eventStartsAt) && Boolean(form.eventEndsAt) && Boolean(form.eventLocation.trim()),
       Boolean(form.templateSlug),
-      form.consentCgu && form.consentRgpd,
+      form.consentCgu && form.consentRgpd && mathOk,
     ];
-  }, [form]);
+  }, [form, hpMathAnswer]);
 
   function handleSubmit() {
     if (pending || !stepValidations.every(Boolean)) return;
@@ -113,6 +136,11 @@ export function FestivalRequestForm() {
         templateSlug: form.templateSlug,
         consentCgu: form.consentCgu,
         consentRgpd: form.consentRgpd,
+        // Anti-bot fields
+        hp_website: hpWebsite,
+        hp_math_answer: hpMathAnswer,
+        hp_math_expected: mathChallenge.current.expected,
+        hp_form_opened_at: formOpenedAt.current,
       });
       if (res.ok) {
         setSubmitted({ email: form.email.trim().toLowerCase() });
@@ -135,7 +163,46 @@ export function FestivalRequestForm() {
         {step === 1 && <StepOrg form={form} update={update} />}
         {step === 2 && <StepEvent form={form} update={update} />}
         {step === 3 && <StepTemplate form={form} update={update} />}
-        {step === 4 && <StepLegal form={form} update={update} />}
+        {step === 4 && (
+          <>
+            <StepLegal form={form} update={update} />
+            {/* Honeypot anti-bot : caché en CSS + accessibilité, doit rester vide */}
+            <div aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: "1px", height: "1px", overflow: "hidden" }}>
+              <label>
+                Site web (laisse vide) :
+                <input
+                  type="text"
+                  name="website"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={hpWebsite}
+                  onChange={(e) => setHpWebsite(e.target.value)}
+                />
+              </label>
+            </div>
+            {/* Math challenge anti-bot — visible humain */}
+            <label className="mt-4 flex flex-col gap-1.5 rounded-xl border border-brand-ink/10 bg-brand-cream/40 p-3 text-sm">
+              <span className="font-medium text-brand-ink/80">
+                🔢 Petite vérif anti-spam : combien font {mathChallenge.current.a} + {mathChallenge.current.b} ?
+              </span>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={hpMathAnswer}
+                onChange={(e) => setHpMathAnswer(e.target.value)}
+                min={0}
+                max={99}
+                required
+                className="w-24 rounded-lg border border-brand-ink/15 bg-white px-3 py-2 text-base focus:border-brand-coral focus:outline-none"
+                style={{ fontSize: "16px" }}
+                placeholder="?"
+              />
+              <span className="text-xs text-brand-ink/55">
+                Désolé pour cette friction, c&apos;est la dernière protection avant le mail magique 🤖
+              </span>
+            </label>
+          </>
+        )}
       </div>
 
       {serverError && (

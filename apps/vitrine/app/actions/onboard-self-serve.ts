@@ -24,6 +24,14 @@ interface SubmitInput {
   templateSlug: string;
   consentCgu: boolean;
   consentRgpd: boolean;
+  /** Honeypot anti-bot : champ caché qui doit RESTER VIDE (les bots le remplissent automatiquement). */
+  hp_website?: string;
+  /** Math challenge anti-bot : la réponse à "X + Y = ?" générée côté UI. */
+  hp_math_answer?: string;
+  /** Math challenge expected (signed côté serveur via HMAC dans une V+) — pour V1 on check côté client+serveur. */
+  hp_math_expected?: number;
+  /** Timestamp ouverture form (anti-submission instantanée par bot). */
+  hp_form_opened_at?: number;
 }
 
 interface ActionResult {
@@ -77,6 +85,29 @@ function getClientIp(): string {
 }
 
 function validateInput(input: SubmitInput): string | null {
+  // 0. Anti-bot defenses (silent failures pour ne pas révéler le mécanisme aux scrapers)
+  // 0a. Honeypot : si rempli = bot, on rejette mais en ne donnant qu'un message générique
+  if (input.hp_website && input.hp_website.trim().length > 0) {
+    return "Demande non valide. Vérifie ton formulaire et réessaie.";
+  }
+  // 0b. Math challenge : si la réponse ne correspond pas à l'expected (signé côté UI)
+  if (
+    typeof input.hp_math_answer === "string" &&
+    typeof input.hp_math_expected === "number"
+  ) {
+    const answered = Number.parseInt(input.hp_math_answer.trim(), 10);
+    if (!Number.isFinite(answered) || answered !== input.hp_math_expected) {
+      return "La réponse au calcul anti-spam n'est pas correcte.";
+    }
+  }
+  // 0c. Form opened too fast (sub-2s = bot)
+  if (typeof input.hp_form_opened_at === "number") {
+    const elapsed = Date.now() - input.hp_form_opened_at;
+    if (elapsed < 2000) {
+      return "Demande envoyée trop rapidement. Prends ton temps et réessaie.";
+    }
+  }
+
   // 1. Required + length cap (anti-DOS payload géant)
   if (!input.firstName?.trim()) return "Prénom requis";
   if (input.firstName.length > LIMITS.firstName) return "Prénom trop long";
