@@ -25,17 +25,18 @@ export default async function CommencerPage() {
     redirect("/auth/login?redirect=/commencer");
   }
 
-  // Skip si l'user a déjà au moins une membership direction (le wizard est pour les NOUVEAUX directeurs).
-  const { data: existingDirection } = await (supabase as any)
+  // Skip si l'user a déjà N'IMPORTE QUELLE membership active (bénévole, post_lead, staff, direction…).
+  // Un bénévole authentifié ne doit JAMAIS atterrir sur le wizard de création d'organisation.
+  // Le wizard est réservé aux comptes qui n'appartiennent encore à aucun festival.
+  const { data: existingMembership } = await (supabase as any)
     .from("memberships")
-    .select("event_id")
+    .select("event_id, role")
     .eq("user_id", user.id)
-    .eq("role", "direction")
     .eq("is_active", true)
     .limit(1)
     .maybeSingle();
 
-  if (existingDirection) {
+  if (existingMembership) {
     redirect("/hub");
   }
 
