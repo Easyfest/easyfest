@@ -250,12 +250,12 @@ export function PlanningTeamsBoard({
         {/* Hint UX adaptatif : message différent selon device */}
         <div className="rounded-lg border border-[var(--theme-primary,_#FF5E5B)]/30 bg-[var(--theme-primary,_#FF5E5B)]/5 px-3 py-2 text-xs text-brand-ink/75">
           <span className="md:hidden">
-            💡 <strong>Sur mobile</strong> : touche un bénévole pour l&apos;assigner à une équipe (chips
-            sticky en haut), ou appui long pour glisser-déposer.
+            💡 <strong>Sur mobile</strong> : touche court = menu d&apos;équipes (chips en haut).
+            Maintien 250ms puis fais glisser = drag-and-drop vers une équipe.
           </span>
           <span className="hidden md:inline">
-            💡 <strong>Sur ordinateur</strong> : glisse-dépose une carte vers une équipe, ou clic droit / appui
-            long sur une carte pour ouvrir le menu équipes.
+            💡 <strong>Sur ordinateur</strong> : clique-glisse une carte vers une équipe pour
+            assigner. Clic droit sur une carte = menu d&apos;équipes rapide.
           </span>
         </div>
 

@@ -4,7 +4,6 @@ import { useDraggable } from "@dnd-kit/core";
 import { useCallback } from "react";
 
 import { useAssign } from "@/components/AssignContext";
-import { useLongPress } from "@/hooks/useLongPress";
 
 export interface PlanningVolunteer {
   user_id: string;
@@ -63,34 +62,21 @@ export function PlanningVolunteerCard({ v, currentTeamId, currentTeamSlug }: Pro
     v.user_id,
   ]);
 
-  const longPress = useLongPress(triggerMenu, { delay: 250, tolerance: 12 });
-
-  // ⚠️ CRITICAL : @dnd-kit listeners include onPointerDown for drag activation.
-  // useLongPress.handlers ALSO defines onPointerDown. JSX spread merges by overwriting,
-  // so spreading {...longPress.handlers} AFTER {...listeners} silently kills the drag.
-  // Fix : merge handlers manually so BOTH fire on pointer-down. Drag activates at 8px
-  // movement (PointerSensor distance), longPress fires at 250ms hold without movement.
-  // If user moves before 250ms → longPress.onPointerMove cancels timer, drag takes over.
-  const mergedPointerHandlers = {
-    onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => {
-      // dnd-kit listener first (it captures pointer for drag tracking)
-      (listeners as any)?.onPointerDown?.(e);
-      longPress.handlers.onPointerDown(e);
-    },
-    onPointerMove: longPress.handlers.onPointerMove,
-    onPointerUp: longPress.handlers.onPointerUp,
-    onPointerCancel: longPress.handlers.onPointerCancel,
-    onPointerLeave: longPress.handlers.onPointerLeave,
-    onContextMenu: longPress.handlers.onContextMenu,
-  };
-
-  // Tap mobile : sur touch device (coarse pointer), un clic court ouvre directement le menu
-  // (plus rapide que long-press 250ms, et ergonomique sur smartphone). Sur desktop (fine pointer),
-  // le clic court ne déclenche rien — c'est le drag ou le long-press/clic droit qui agit.
+  // ⚠️ ARCHITECTURE DRAG vs MENU :
+  // — Le DRAG est géré 100% par @dnd-kit via {...listeners} (PointerSensor distance:8 +
+  //   TouchSensor delay:250 + MouseSensor distance:8). On NE TOUCHE PAS à listeners,
+  //   sinon le pointer capture casse silencieusement (ce qui était le bug avant ce fix).
+  // — Le MENU s'ouvre via 2 chemins NON-INTERFÉRANTS avec dnd-kit :
+  //   1. Mobile (pointer:coarse) → onClick handleClick = tap rapide ouvre menu
+  //      (le drag mobile démarre via long-press 250ms du TouchSensor → pas de conflit).
+  //   2. Desktop (pointer:fine) → onContextMenu (clic droit) = ouvre menu
+  //      (le drag desktop démarre via mouvement >8px → click sans drag ne fait rien).
+  // Plus de useLongPress (qui posait un onPointerDown qui tuait le drag de dnd-kit).
   const handleClick = useCallback(
     (e: React.MouseEvent) => {
       if (isDragging) return;
       if (typeof window === "undefined") return;
+      // Tap mobile (coarse pointer) = ouvre menu
       if (window.matchMedia?.("(pointer: coarse)").matches) {
         e.preventDefault();
         e.stopPropagation();
@@ -98,6 +84,14 @@ export function PlanningVolunteerCard({ v, currentTeamId, currentTeamSlug }: Pro
       }
     },
     [isDragging, triggerMenu],
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      triggerMenu();
+    },
+    [triggerMenu],
   );
 
   const style = transform
@@ -114,12 +108,12 @@ export function PlanningVolunteerCard({ v, currentTeamId, currentTeamSlug }: Pro
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...(listeners as any)}
-      {...mergedPointerHandlers}
+      {...listeners}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       role="button"
       tabIndex={0}
-      aria-label={`Bénévole ${v.full_name}. Touche pour assigner.`}
+      aria-label={`Bénévole ${v.full_name}. Glisse vers une équipe ou clic droit pour le menu.`}
       className={`group relative rounded-lg border bg-white p-2 text-xs shadow-sm transition select-none cursor-grab active:cursor-grabbing ${
         v.pending_account ? "border-blue-200 bg-blue-50/30 opacity-80" : ""
       } ${
