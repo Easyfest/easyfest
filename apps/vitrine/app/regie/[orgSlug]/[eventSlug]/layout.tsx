@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 
+import { TenantThemeProvider } from "@/components/TenantThemeProvider";
 import { createServerClient } from "@/lib/supabase/server";
+import { RegieNav } from "./RegieNav";
 
 interface Props {
   children: React.ReactNode;
@@ -17,11 +18,13 @@ export default async function RegieLayout({ children, params }: Props) {
 
   const { data: ev } = await supabase
     .from("events")
-    .select("id, name, organization:organization_id (slug, name)")
+    .select("id, name, organization:organization_id (id, slug, name)")
     .eq("slug", eventSlug)
     .maybeSingle();
 
   if (!ev) redirect("/hub");
+
+  const orgId = (ev as any).organization?.id as string | undefined;
 
   const { data: membership } = await supabase
     .from("memberships")
@@ -36,44 +39,34 @@ export default async function RegieLayout({ children, params }: Props) {
   }
 
   return (
+    <TenantThemeProvider organizationId={orgId} fullHeight>
     <div className="mx-auto max-w-7xl">
-      <header className="sticky top-0 z-10 border-b border-brand-ink/10 bg-white/95 px-6 py-3 backdrop-blur">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-widest text-brand-coral">
+      <header className="sticky top-0 z-10 border-b border-brand-ink/10 bg-white/95 px-4 py-3 backdrop-blur sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p
+              className="truncate text-xs font-medium uppercase tracking-widest"
+              style={{ color: "var(--theme-primary, #FF5E5B)" }}
+            >
               {(ev as any).organization?.name} · Régie
             </p>
-            <h1 className="font-display text-xl font-semibold leading-tight">{ev.name}</h1>
+            <h1 className="truncate font-display text-xl font-semibold leading-tight">
+              {ev.name}
+            </h1>
           </div>
-          <nav className="flex items-center gap-1 text-sm">
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}`} label="Dashboard" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/applications`} label="Candidatures" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/planning`} label="Planning" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/sponsors`} label="Sponsors" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/plan`} label="Plan" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/safer`} label="Safer" />
-            <NavTab href={`/regie/${orgSlug}/${eventSlug}/messages`} label="Messages" />
-          </nav>
           <form action="/auth/logout" method="post">
-            <button className="rounded-lg border border-brand-ink/15 px-3 py-1 text-xs">
+            <button className="min-h-[44px] rounded-lg border border-brand-ink/15 px-3 py-2 text-xs font-medium hover:bg-brand-ink/5">
               Quitter
             </button>
           </form>
         </div>
+        <div className="mt-3">
+          <RegieNav orgSlug={orgSlug} eventSlug={eventSlug} />
+        </div>
       </header>
 
-      <div className="px-6 py-6">{children}</div>
+      <div className="px-4 py-6 sm:px-6">{children}</div>
     </div>
-  );
-}
-
-function NavTab({ href, label }: { href: string; label: string }) {
-  return (
-    <Link
-      href={href}
-      className="rounded-lg px-3 py-1.5 font-medium text-brand-ink/70 hover:bg-brand-ink/5"
-    >
-      {label}
-    </Link>
+    </TenantThemeProvider>
   );
 }
