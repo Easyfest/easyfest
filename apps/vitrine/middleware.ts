@@ -46,6 +46,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Force 1er passage par setup-password si password_set !== true
+  // Exempt : la page elle-même + logout + APIs (pour ne pas casser l'export RGPD etc.)
+  const isSetupPath = path === "/account/setup-password";
+  const isLogout = path === "/auth/logout" || path.startsWith("/auth/logout/");
+  const isApi = path.startsWith("/api/");
+  const passwordSet = data.user.user_metadata?.["password_set"] === true;
+
+  if (!passwordSet && !isSetupPath && !isLogout && !isApi) {
+    return NextResponse.redirect(new URL("/account/setup-password", req.url));
+  }
+
   return res;
 }
 
