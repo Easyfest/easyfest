@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Easyfest app icon">
+  <title>Easyfest</title>
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#FF5E5B"/>
+  <path d="M 352 256 L 352 800 M 352 320 L 736 320 M 352 512 L 640 512" stroke="#FFF8F0" stroke-width="96" stroke-linecap="round" fill="none"/>
+  <circle cx="736" cy="704" r="56" fill="#F4B860"/>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 220" role="img" aria-label="Easyfest">
+  <title>Easyfest — Le festival pro, sans le prix pro</title>
+  <rect x="108" y="8" width="64" height="64" rx="14" fill="#FF5E5B"/>
+  <path d="M 130 24 L 130 58 M 130 28 L 154 28 M 130 40 L 148 40" stroke="#FFF8F0" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <circle cx="154" cy="52" r="3.5" fill="#F4B860"/>
+  <text x="140" y="118" text-anchor="middle" font-family="'Source Serif 4','Source Serif Pro',Georgia,serif" font-size="38" font-weight="900" fill="#1A1A1A" letter-spacing="-0.8">Easyfest</text>
+  <text x="140" y="148" text-anchor="middle" font-family="Inter,system-ui,-apple-system,sans-serif" font-size="9" font-weight="600" fill="#1A1A1A" opacity="0.6" letter-spacing="2.5">LE FESTIVAL PRO, SANS LE PRIX PRO</text>
+  <line x1="100" y1="170" x2="180" y2="170" stroke="#F4B860" stroke-width="2" stroke-linecap="round"/>
+</svg>

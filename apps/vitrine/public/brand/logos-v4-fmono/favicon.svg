@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Easyfest">
+  <title>Easyfest</title>
+  <rect x="0" y="0" width="32" height="32" rx="7" fill="#FF5E5B"/>
+  <path d="M 11 8 L 11 25 M 11 10 L 23 10 M 11 16 L 20 16" stroke="#FFF8F0" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="23" cy="22" r="1.8" fill="#F4B860"/>
+</svg>
