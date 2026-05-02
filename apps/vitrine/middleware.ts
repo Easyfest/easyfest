@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient as createSsrClient } from "@supabase/ssr";
 
-const PROTECTED_PREFIXES = ["/v/", "/r/", "/staff/", "/regie/", "/admin/", "/hub"];
+const PROTECTED_PREFIXES = ["/v/", "/staff/", "/regie/", "/poste/", "/admin/", "/hub"];
 
 export async function middleware(req: NextRequest) {
   if (process.env["MAINTENANCE_MODE"] === "true" && !req.nextUrl.pathname.startsWith("/maintenance") && !req.nextUrl.pathname.startsWith("/api/")) {
@@ -9,6 +9,14 @@ export async function middleware(req: NextRequest) {
   }
 
   const path = req.nextUrl.pathname;
+
+  // Legacy redirect /r and /r/* → /regie/* (308 = permanent + preserve method/body)
+  if (path === "/r" || path === "/r/" || path.startsWith("/r/")) {
+    const rest = path === "/r" || path === "/r/" ? "" : path.substring(2); // garde le leading "/"
+    const target = new URL("/regie" + rest + req.nextUrl.search, req.url);
+    return NextResponse.redirect(target, 308);
+  }
+
   const needsAuth = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(p));
   if (!needsAuth) return NextResponse.next();
 
