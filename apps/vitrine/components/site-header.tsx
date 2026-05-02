@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Logo } from "@/components/Logo";
 import { createServerClient } from "@/lib/supabase/server";
 
 /**
@@ -14,16 +15,12 @@ export async function SiteHeader() {
   return (
     <header className="sticky top-0 z-40 border-b border-brand-ink/10 bg-brand-cream/80 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 transition hover:opacity-80">
-          <span
-            aria-hidden
-            className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-coral text-lg font-bold text-white shadow-soft"
-          >
-            E
-          </span>
-          <span className="font-display text-xl font-bold tracking-tight text-brand-ink">
-            Easyfest
-          </span>
+        <Link
+          href="/"
+          aria-label="Easyfest, accueil"
+          className="flex items-center transition hover:opacity-85 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-easyfest-coral"
+        >
+          <Logo variant="horizontal" size={36} priority />
         </Link>
 
         <nav className="hidden items-center gap-1 md:flex">
@@ -77,17 +74,12 @@ export function SiteFooter() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 md:grid-cols-3">
           <div>
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden
-                className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-coral text-sm font-bold text-white"
-              >
-                E
-              </span>
-              <span className="font-display text-lg font-bold">Easyfest</span>
-            </div>
+            <Logo variant="horizontal" size={32} />
             <p className="mt-3 text-sm text-brand-ink/60">
               Le festival pro, sans le prix pro. SaaS multi-tenant pour festivals associatifs.
+            </p>
+            <p className="mt-2 text-[11px] font-semibold uppercase tracking-tagline text-easyfest-pine">
+              Hébergé en France · RGPD-clean
             </p>
           </div>
 

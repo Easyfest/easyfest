@@ -1,8 +1,24 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, Source_Serif_4 } from "next/font/google";
 
 import { CookieBanner } from "@/components/cookie-banner";
 
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  weight: ["400", "500", "600", "700"],
+});
+
+const sourceSerif = Source_Serif_4({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-source-serif",
+  weight: ["700", "900"],
+  style: ["normal"],
+});
 
 export const metadata: Metadata = {
   title: {
@@ -10,7 +26,7 @@ export const metadata: Metadata = {
     template: "%s · Easyfest",
   },
   description:
-    "Easyfest est l'outil de référence des organisateurs de festivals associatifs. Inscription bénévoles, planning, scan QR, bien-être, RGPD-clean. Hébergé en France.",
+    "L'app de référence des organisateurs de festivals associatifs. Bénévoles, planning, sponsors, sécurité, RGPD — hébergé en France.",
   metadataBase: new URL(process.env["NEXT_PUBLIC_APP_URL"] ?? "https://easyfest.app"),
   applicationName: "Easyfest",
   authors: [{ name: "Easyfest", url: "https://easyfest.app" }],
@@ -22,20 +38,23 @@ export const metadata: Metadata = {
     "billetterie association",
     "RGPD festival",
     "alternative Weezevent",
-    "alternative Sourcil",
     "scan QR bénévole",
-    "convention bénévolat",
   ],
   icons: {
     icon: [
-      { url: "/brand/icons/favicon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "any" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/brand/logos-v4-fmono/favicon.svg", type: "image/svg+xml" },
     ],
+    shortcut: "/favicon.svg",
     apple: [
-      { url: "/brand/icons/apple-touch-icon.svg", sizes: "180x180", type: "image/svg+xml" },
+      {
+        url: "/brand/logos-v4-fmono/app-icon.svg",
+        sizes: "180x180",
+        type: "image/svg+xml",
+      },
     ],
   },
-  manifest: "/manifest.webmanifest",
+  manifest: "/site.webmanifest",
   openGraph: {
     type: "website",
     locale: "fr_FR",
@@ -46,7 +65,7 @@ export const metadata: Metadata = {
     url: "https://easyfest.app",
     images: [
       {
-        url: "/brand/icons/og-image.svg",
+        url: "/og-image.svg",
         width: 1200,
         height: 630,
         alt: "Easyfest — Le festival pro, sans le prix pro",
@@ -59,7 +78,7 @@ export const metadata: Metadata = {
     title: "Easyfest — Le festival pro, sans le prix pro",
     description:
       "Une seule app pour gérer ton festival : bénévoles, planning, sponsors, conventions, sécurité.",
-    images: ["/brand/icons/og-image.svg"],
+    images: ["/og-image.svg"],
     creator: "@easyfest_app",
   },
   robots: {
@@ -73,27 +92,22 @@ export const metadata: Metadata = {
       "max-snippet": -1,
     },
   },
-  verification: {
-    // À remplir après création des comptes Search Console + Bing Webmasters
-    // google: "...",
-    // other: { "msvalidate.01": "..." },
-  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#FFF8F0" },
+    { media: "(prefers-color-scheme: light)", color: "#FF5E5B" },
     { media: "(prefers-color-scheme: dark)", color: "#1A1A1A" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={`${inter.variable} ${sourceSerif.variable}`}>
       <head>
-        {/* JSON-LD organization (SEO + Knowledge Graph) */}
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
@@ -123,7 +137,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="min-h-screen bg-brand-cream font-sans text-brand-ink antialiased">
+      <body className="min-h-screen bg-easyfest-cream font-sans text-easyfest-ink antialiased">
         {children}
         <CookieBanner />
       </body>
