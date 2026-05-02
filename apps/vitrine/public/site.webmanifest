@@ -1,0 +1,46 @@
+{
+  "name": "Easyfest",
+  "short_name": "Easyfest",
+  "description": "Le festival pro, sans le prix pro. App de gestion festival, bénévoles et sécurité.",
+  "lang": "fr",
+  "start_url": "/hub",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFF8F0",
+  "theme_color": "#FF5E5B",
+  "icons": [
+    {
+      "src": "/brand/logos-v4-fmono/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/brand/logos-v4-fmono/favicon.svg",
+      "sizes": "32x32",
+      "type": "image/svg+xml"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mon hub",
+      "short_name": "Hub",
+      "description": "Accéder à mon espace Easyfest",
+      "url": "/hub",
+      "icons": [
+        { "src": "/brand/logos-v4-fmono/favicon.svg", "sizes": "32x32" }
+      ]
+    },
+    {
+      "name": "Scanner un QR",
+      "short_name": "Scan",
+      "description": "Scanner un badge bénévole",
+      "url": "/staff",
+      "icons": [
+        { "src": "/brand/logos-v4-fmono/favicon.svg", "sizes": "32x32" }
+      ]
+    }
+  ],
+  "categories": ["productivity", "events", "business"]
+}
