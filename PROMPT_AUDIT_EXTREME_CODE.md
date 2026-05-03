@@ -4,6 +4,249 @@
 
 ---
 
+## 🎯 PRIORITÉ ABSOLUE — RÉSOUDRE UNE FOIS POUR TOUTES LE BUG DnD POST-INVITE
+
+> **Symptôme observé en prod (rapporté par user, J-26)** : un bénévole reçoit son invite, clique le magic-link, arrive sur "Attend ton affectation", **MAIS** côté Pamela régie planning, l'assignation échoue avec "⏳ Compte pas encore créé — invite ce bénévole d'abord". Ce qui crée une boucle infinie : le bénévole se voit demander une affectation, et la régie se voit demander d'inviter à nouveau quelqu'un déjà invité.
+
+### Cause racine (confirmée en investigation Cowork)
+
+3 bugs imbriqués causent ensemble cette boucle :
+
+1. **Bug #1** (RLS `memberships_insert_lead` bloque l'auto-création de membership volunteer côté user) — déjà fixé en code par toi (commit `5c231ae`) + migration RLS appliquée. ✅
+2. **Bug #2** (magic-link callback ne crée pas la session côté Next.js — manque `/auth/callback` qui parse le hash JWT) — non fixé. ❌
+3. **Bug #4** (seeds SQL créent les volunteer_applications avec status='validated' mais PAS les memberships correspondantes — d'où les 83 bénévoles tous ⏳) — non fixé. ❌
+
+### Fix universel à implémenter (en plus des fixes ci-dessus)
+
+Au-delà des 3 bugs, **`assignVolunteerToTeam` doit devenir robuste face aux pre-volunteers** : si Pamela drag un user avec préfixe `pre-`, l'action doit AUTO-CRÉER la membership volunteer (via service-role bypass) à condition qu'une `volunteer_application validated` existe pour cet email ET qu'un `auth.users` existe pour cet email. Le DnD ne doit JAMAIS rejeter avec "Compte pas encore créé" si les conditions de sécurité sont remplies.
+
+```typescript
+// apps/vitrine/app/actions/planning.ts — assignVolunteerToTeam refactor
+export async function assignVolunteerToTeam(input: {
+  volunteerUserId: string;  // peut être "pre-<email>" OU un vrai UUID
+  targetPositionId: string | null;
+  eventId: string;
+}) {
+  const userClient = createServerClient();
+  const { data: userData } = await userClient.auth.getUser();
+  if (!userData.user) return { ok: false, error: "Non authentifié" };
+
+  // Permission check (multi-membership safe)
+  const { data: memberships } = await userClient
+    .from("memberships")
+    .select("role")
+    .eq("user_id", userData.user.id)
+    .eq("event_id", input.eventId)
+    .eq("is_active", true);
+  const hasAccess = (memberships ?? []).some(m => ["direction", "volunteer_lead"].includes(m.role));
+  if (!hasAccess) return { ok: false, error: "Permission refusée" };
+
+  const admin = createServiceClient();
+  let realUserId = input.volunteerUserId;
+
+  // 🆕 Auto-création de la membership si pre-volunteer
+  if (input.volunteerUserId.startsWith("pre-")) {
+    const email = input.volunteerUserId.slice(4).toLowerCase();
+    
+    // 1. Vérifier qu'une auth.users existe (le user a déjà été invité au moins une fois)
+    const { data: { users }, error: listErr } = await admin.auth.admin.listUsers();
+    if (listErr) return { ok: false, error: `Auth lookup failed: ${listErr.message}` };
+    const authUser = users.find(u => u.email?.toLowerCase() === email);
+    if (!authUser) {
+      return { ok: false, error: `Compte auth introuvable pour ${email} — clique 📧 Inviter dans Candidatures` };
+    }
+
+    // 2. Vérifier qu'une volunteer_application validated existe pour cet email + cet event
+    const { data: app } = await admin
+      .from("volunteer_applications")
+      .select("id, status")
+      .eq("email", email)
+      .eq("event_id", input.eventId)
+      .eq("status", "validated")
+      .maybeSingle();
+    if (!app) return { ok: false, error: `Aucune candidature validée pour ${email} — valide d'abord` };
+
+    // 3. Créer la membership volunteer (bypass RLS via service client)
+    const { error: memErr } = await admin.from("memberships").insert({
+      user_id: authUser.id,
+      event_id: input.eventId,
+      role: "volunteer",
+      is_active: true,
+    });
+    if (memErr && memErr.code !== "23505") {  // 23505 = already exists, ignore
+      return { ok: false, error: `Création membership échouée: ${memErr.message}` };
+    }
+
+    realUserId = authUser.id;
+
+    // 4. Créer le profil si manquant (idempotent)
+    const { data: existingProfile } = await admin
+      .from("volunteer_profiles")
+      .select("user_id")
+      .eq("user_id", authUser.id)
+      .maybeSingle();
+    if (!existingProfile) {
+      // Récupérer les détails de l'application pour bootstrap le profil
+      const { data: fullApp } = await admin
+        .from("volunteer_applications")
+        .select("*")
+        .eq("id", app.id)
+        .single();
+      if (fullApp) {
+        await admin.from("volunteer_profiles").insert({
+          user_id: authUser.id,
+          email,
+          full_name: fullApp.full_name ?? email,
+          first_name: fullApp.first_name,
+          last_name: fullApp.last_name,
+          birth_date: fullApp.birth_date,
+          phone: fullApp.phone,
+          // ... autres champs
+        });
+      }
+    }
+
+    // 5. Audit log
+    await admin.from("audit_log").insert({
+      user_id: userData.user.id,
+      event_id: input.eventId,
+      action: "membership.auto_created_via_assignment",
+      payload: { email, target_user_id: authUser.id, reason: "drag_pre_volunteer" },
+    });
+  }
+
+  // ... reste du code assignVolunteerToTeam (delete existing assignments + insert new) inchangé,
+  // mais en utilisant realUserId au lieu de input.volunteerUserId.
+}
+```
+
+### Cleanup côté planning page.tsx
+
+Une fois les memberships auto-créées, les bénévoles ne doivent PLUS apparaître comme pre-volunteers. La query `members` dans `apps/vitrine/app/regie/[orgSlug]/[eventSlug]/planning/page.tsx` les retournera correctement avec `pending_account: false` (car maintenant ils ont une membership active). Pas de change requis côté query.
+
+### Critère de validation E2E (Cowork retest après push)
+
+1. Régie : créer candidature manual-signup mailinator → bouton 📧 Inviter (mail reçu)
+2. **Cas A — magic-link cliqué** : click le lien → /hub → carte volunteer affichée + membership active (Bug #1+#2 fixés)
+3. **Cas B — magic-link PAS cliqué** : régie planning → drag la carte ⏳ vers Bar → **"✓ Sauvegardé" et plus de "Compte pas encore créé"** (fix universel ci-dessus). Membership auto-créée côté DB.
+4. F5 régie planning → bénévole reste assigné Bar (persistence DB)
+5. Login Lucas mailinator (cas B) → /v/.../planning → voit son shift Bar (membership rétro-active)
+
+### Bénéfice business
+
+Pamela peut **placer ses 79 bénévoles sur le planning même AVANT que chacun ait cliqué son magic-link**. Quand le bénévole finit par se connecter, il trouve son shift déjà attribué. Plus de boucle infinie entre régie et volunteer.
+
+---
+
+## 📊 AUDIT CODE OFFICIEL (8 agents · verdict 51/100 · 15 Critiques + 25 Hautes)
+
+**Date** : audit code post-Bug #1 fix · livré au user · score fiabilité 51/100 · **🚨 État Critique**
+
+**Verdict** : GO conditionnel pour RDL2026 (festival 28-30 mai) sous réserve de fixer les **8 P0** ci-dessous (~5 jours hardening). NO-GO pour onboarding nouveaux tenants en l'état (tables manquantes + design system fantôme + zero tests régression).
+
+### Top 10 actions priorisées (à intégrer aux phases déjà prévues)
+
+| # | Priorité | Action | Effort | Phase |
+|---|---|---|---|---|
+| 1 | **P0** | `git add pnpm-lock.yaml` + Vercel `--frozen-lockfile=true` | 0.5h | P1 nettoyage |
+| 2 | **P0** | DDL `organization_themes` + `pending_festival_requests` via Studio dump → migration `20260504*` (incl. RLS) | 2h | P2 impl manquantes |
+| 3 | **P0** | Config `verify_jwt=false` pour `rgpd_purge` + `rgpd_hard_delete` (+ section manquante) + cron Vercel ou pg_cron | 1.5h | P2 |
+| 4 | **P0** | `error.tsx` + `loading.tsx` dans `app/{regie,staff,hub,poste,v}/**` + remplacer `return null` par `notFound()`/`<EmptyState>` | 3h | P2 |
+| 5 | **P0** | Race condition planning : convertir `assignVolunteerToTeam` en RPC SQL transactionnel + FOR UPDATE + propager 23505 dans audit_log | 3h | P3 (avec fix DnD universel ci-dessus) |
+| 6 | **P0** | Wrapper `withErrorReporting()` server actions + `Sentry.captureUnderscoreErrorException` dans `error.tsx` + `global-error.tsx` | 2h | P3 |
+| 7 | **P0** | 4 tests régression Bug #1-#4 (Vitest + Playwright) | 1j | P4 tests |
+| 8 | **P0** | Wire-up des 3 `test.fixme` Playwright critiques (drag, scan QR replay, ban) | 2j | P4 |
+| 9 | **P1** | `tailwindcss` en devDep root + retirer 7 imports React unused dans `packages/ui/**` → débloque `pnpm typecheck` + `pnpm lint` | 1h | P1 |
+| 10 | **P1** | Storage policy bucket `parental-authorizations` (RLS scope `org_id`/`event_id`) | 1.5h | P2 |
+
+### Critiques détaillés (ordre d'application)
+
+#### Backend & API (5 Critiques)
+- **C1** Tables `organization_themes` + `pending_festival_requests` consommées par 6+ fichiers MAIS absentes des migrations (`apps/vitrine/app/actions/theme.ts:47`, `onboard-self-serve.ts:226`). Risque crash silencieux prod. → action #2.
+- **C2** `events_insert_authenticated` policy `auth.uid() is not null` → cross-tenant leak (n'importe quel volunteer peut créer un event sur n'importe quelle org). Restreindre à `has_role_at_least(organization_id, 'direction')`. (`packages/db/supabase/migrations/20260430000007_rls_policies.sql:60-61`)
+- **C3** Edge fn `rgpd_hard_delete` absente de `config.toml` → default `verify_jwt=true` rejettera l'appel cron `X-Cron-Secret` → soft-delete 30j ne purge jamais → non-conformité RGPD Art.17. Ajouter `[functions.rgpd_hard_delete] verify_jwt=false`.
+- **C4** `message_channels` sans policy INSERT mais `messaging.ts:54` insère côté user → broadcast cassé en prod sans qu'aucun test le détecte. Ajouter `channels_insert_lead` + check rôle action.
+- **C5** 4 server actions sans check rôle côté action (`manualVolunteerSignup`, `reassignVolunteer`, `broadcastMessage`, `applyThemePreset`) → pas de defense-in-depth, repose 100% sur RLS.
+
+#### Frontend UX (3 Critiques)
+- **F1** Aucun `error.tsx` granulaire dans `app/{regie,staff,hub,poste,v}/**` → crash Supabase = écran kaputt pendant le festival. → action #4.
+- **F2** 3× `return null` silencieux quand event introuvable (`v/.../qr/page.tsx:13,21`, `staff/.../page.tsx:18`, `regie/.../planning/page.tsx:21`) → bénévole/scanner voit un écran blanc. Remplacer par `notFound()` + `<EmptyState>`.
+- **F3** Aucun `loading.tsx` dans routes protégées → Server-Component figé sur 3G.
+
+#### Observability (2 Critiques)
+- **O1** **0 `Sentry.captureException`** dans 29 server actions + 5 API routes → Sentry payé pour rien, exceptions catchées invisibles. → action #6.
+- **O2** `global-error.tsx:18` et `error.tsx:21` ne capturent pas vers Sentry → erreurs runtime client perdues.
+
+#### QA (5 Critiques)
+- **Q1** 4 bugs P0 récents sans aucun test régression → re-régression silencieuse possible. → action #7.
+- **Q2** Race condition `assignVolunteerToTeam` non transactionnelle (`planning.ts:156-227`) → assignations doublons + audit corrompu (conflit 23505 avalé silencieusement). → action #5.
+- **Q3** Pas de panic mode SQL ; aucun moyen d'arrêter une fuite cross-tenant rapidement. Ajouter flag DB `system_settings.write_locked` lu par toutes les server actions.
+- **Q4** Middleware ne vérifie pas `is_active` user/membership (`middleware.ts:42`) → user révoqué garde accès jusqu'à exp JWT (~1h).
+- **Q5** Flow staff_scan terrain (QR sign + verify + replay) jamais E2E (`staff-scan.spec.ts:23,39,43` `test.fixme`). → action #8.
+
+#### Infra (1 Critique)
+- **I1** `pnpm-lock.yaml` **jamais tracké** + `--frozen-lockfile=false` Vercel → builds non reproductibles, bump Supabase v2 non verrouillé. → action #1.
+
+### Hautes / Moyennes (résumé pour extension Phase 2 implémentations)
+
+#### Sécurité Hautes
+- Bucket `parental-authorizations` (PII mineurs) sans policy `storage.objects` → action #10.
+- Cron RGPD non câblé → action #3.
+- CSP `'unsafe-inline'` + `'unsafe-eval'` (`next.config.mjs:39`).
+- HSTS absent (`next.config.mjs:50-61`).
+
+#### Email Hautes
+- Email refus candidature **jamais envoyé** (`applications-admin.ts:47-75`). Créer Edge fn + template `application-refused.html`.
+- `trigger_safer_alert` n'écrit pas `notification_log` → pas de preuve notification responsables → contentieux possible.
+- Template `application-validated.html` orphelin (HTML inline dans Edge fn → maintenance double, dérive brand).
+- Pas de webhook Resend (bounce/complaint) → `notification_log.status='bounced'` jamais alimenté.
+
+#### DevOps Hautes
+- Lint monorepo cassé (`package.json:44` `eslint-plugin-tailwindcss` sans `tailwindcss` root). → action #9.
+- Build vitrine masque TS+ESLint (`next.config.mjs:6-7`). Désactiver après fix typecheck.
+- 7× `TS6133 React unused` dans `packages/ui/**` → cascade turbo cassée. → action #9.
+
+#### UI/A11y Hautes
+- Inputs critiques en `text-sm` (14px) → zoom auto iOS Safari sur scan check-in et inscription mobile. Passer à `text-base`.
+- Touch targets <44px sur boutons régie. Passer à `min-h-[44px]`.
+- Design system `@easyfest/ui` (`Card`/`Button`/`Badge`/`EmptyState`) jamais importé dans `app/**` (sauf `page.tsx:10`) → 44 `rounded-2xl border` dupliqués + 5 variantes empty state. Migration progressive.
+
+### Findings pré-existants A/B/C/D
+
+| ID | Description | Sévérité | Action |
+|---|---|---|---|
+| **A** | BOM UTF-8 en tête de `20260502000006_anon_read_public_orgs_positions.sql` | ⚠️ Moyenne | P2 (`sed -i '1s/^\xEF\xBB\xBF//' …`) |
+| **B** | Services Supabase locaux stoppés (`edge_runtime`, `analytics`, `vector`) malgré config.toml `enabled=true` | 🚨 Haute | P1 (mais en local ; prod non affectée) |
+| **C** | Branche dirty pré-upgrade : 6 changes non-committés dont `pnpm-lock.yaml` untracked | 🚨 Critique | → action #1 |
+| **D** | Squelette npm orphelin `~/AppData/Roaming/npm/node_modules/supabase/` | ℹ️ Info | P3 cosmétique |
+
+### Tests régression à écrire (4 bugs P0)
+
+```
+apps/vitrine/e2e/regression-p0/
+├── bug-01-onboard-membership-rls.spec.ts  (Bug #1 - service-role bypass)
+├── bug-02-magic-link-callback.spec.ts     (Bug #2 - /auth/callback hash parse)
+├── bug-03-setup-password-idempotent.spec.ts (Bug #3)
+└── bug-04-backfill-seed-memberships.spec.ts (Bug #4)
+```
+
+### PR séparées recommandées (ordre J-26)
+
+1. `chore/lockfile-track` — `git add pnpm-lock.yaml` + Vercel `--frozen-lockfile=true`
+2. `fix/missing-tables` — DDL `organization_themes` + `pending_festival_requests`
+3. `fix/dnd-pre-volunteer-auto-membership` — fix universel DnD ci-dessus + Bug #2 + Bug #4
+4. `fix/error-boundaries` — `error.tsx` + `loading.tsx` + `notFound()`
+5. `fix/race-planning` — RPC transactionnelle `assign_volunteer_to_team`
+6. `fix/sentry-coverage` — wrapper `withErrorReporting` + Sentry hook
+7. `fix/rgpd-cron` — verify_jwt=false + cron Vercel
+8. `test/p0-regression` — 4 tests Bug #1-#4 + 3 wire-up `test.fixme`
+9. `chore/ui-typecheck` — débloque lint + typecheck
+10. `chore/bom-strip` — BOM `20260502000006_*.sql`
+11. `chore/storage-policies` — `parental-authorizations` + `event-media`
+12. `feat/email-refus-candidature` + webhook Resend bounce
+
+---
+
 ## 🔴🔴🔴 BUG ABSOLUMENT BLOQUANT À FIXER EN PRIORITÉ #1 (avant tout le reste)
 
 **`onboardCurrentUser` ne crée PAS la membership volunteer post-magic-link** (RLS bloque l'insert).

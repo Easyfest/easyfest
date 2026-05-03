@@ -1,3 +1,57 @@
+# 🔴 RETEST EXTRÊME — 3 mai 2026 (Cowork) — STOP PHASE 1 déclenché
+
+> Audit conduit dans browser `easy_fest`, login Pamela (`pam@easyfest.test` / `easyfest-demo-2026-v2`).
+>
+> **Verdict immédiat : BUG #1 PAS FIXÉ EN PROD.** Le scénario PRIORITÉ ABSOLUE du `PROMPT_AUDIT_EXTREME_COWORK.md` a été stoppé conformément au critère 14 : `❌ Si toast d'erreur "Compte pas encore créé. Invitez d'abord ce bénévole" : BUG #1 PAS FIXÉ → STOP la PHASE 1, alerter le user en chat`.
+
+## Reproduction live (3 mai 2026 ~10h25 UTC)
+
+1. Login Pamela sur prod easyfest.app — ✅ OK
+2. `/regie/icmpaca/rdl-2026/applications/manual-signup` — créer candidature `Anaïs Test DnD J26` / `easyfest-extreme-dnd-2603@mailinator.com` — ✅ status auto `Validé`
+3. Bouton 📧 Inviter — ✅ status `Déjà invité·e + Renvoyer`, mail envoyé (Mailinator confirme 2 mails reçus : `Confirm Your Signup` + `Ta candidature pour Roots du Lac 2026 est validée`)
+4. ⚠️ Mailinator rate-limit empêche extraction du magic-link — pivot test sur **Anaïs Bayart** (vraie femme du user, ya cliqué le magic-link en prod il y a quelques jours)
+5. `/regie/icmpaca/rdl-2026/planning` — compteur affiche `**84 bénévoles (84 en attente compte)**` — TOUS les 84 sont en pre-volunteer ⏳, AUCUN n'a la membership
+6. Filtrer "anais" → carte Anaïs Bayart visible, badge ⏳, wish BAR
+7. **Right-click** sur la carte → toast jaune : `💡 Pour inviter anaisbayart@outlook.fr, va sur l'onglet Candidatures → bouton 📧 à côté de son nom`
+8. **Drag-drop** carte → équipe Bar → toast jaune : **`⏳ Compte pas encore créé — invite ce bénévole d'abord`** ❌
+
+## Évidence (screenshot IDs, conversation Cowork)
+
+- `ss_4569vv9hb` formulaire manual-signup vierge
+- `ss_8413d13pm` formulaire rempli Anaïs Test DnD
+- `ss_03883jwqt` applications list — Anaïs Test DnD `Déjà invité·e`
+- `ss_7834i8prp` planning — `84 bénévoles (84 en attente compte)`
+- `ss_1664bkttk` planning filtré "anais" — carte Anaïs Bayart badge ⏳
+- `ss_6621uqtwy` right-click → toast `Pour inviter…`
+- `ss_05404f4dn` drag → toast `Compte pas encore créé — invite ce bénévole d'abord`
+
+## Verdict détaillé
+
+3 bugs imbriqués causent ensemble cette boucle infinie en prod :
+
+1. **Bug #1** (RLS `memberships_insert_lead` bloque l'auto-création de membership volunteer côté user) — commit `5c231ae` claim « FIXED » côté code, mais **84 bénévoles tous en pre-volunteer en prod** prouve que le fix n'a pas pris effet (deploy Vercel pas exécuté ? branche `chore/supabase-cli-v2-upgrade` pas mergée sur main ? migration RLS pas appliquée ?). 🔴
+2. **Bug #2** (magic-link callback `/auth/callback` parse hash JWT côté client uniquement — manque côté Next.js) — non fixé. ❌
+3. **Universal fix `assignVolunteerToTeam`** (auto-create membership pour pre-volunteers ayant `auth.users` + `volunteer_application validated`) — **non implémenté**. La spec est dans `PROMPT_AUDIT_EXTREME_CODE.md` section PRIORITÉ ABSOLUE, mais Claude Code ne l'a pas encore exécuté. ❌
+
+**Sans ces 3 fixes ensemble, le festival RDL2026 du 28-30 mai démarre avec 0 bénévole assigné. La démo Pamela est cassée. Le J-26 est compromis.**
+
+## Action user immédiate
+
+Lancer **immédiatement** le `PROMPT_AUDIT_EXTREME_CODE.md` dans Claude Code pour :
+1. Vérifier que le commit `5c231ae` est sur main + déployé Vercel + migration RLS appliquée en prod
+2. Implémenter Bug #2 (page `/auth/callback`)
+3. Implémenter le universal fix `assignVolunteerToTeam` (code TS spec'é dans le prompt)
+4. Push, redeploy
+5. Relancer Cowork Phase 4 retest
+
+---
+
+## ❗ Bug observé en parallèle pendant l'audit (à intégrer Phase 4)
+
+**Pamela password en prod = `easyfest-demo-2026-v2`** (au lieu de `easyfest-demo-2026` dans seeds/docs). Probablement résultat d'un test précédent qui a forcé un changement (Bug #3 setup-password idempotence). À prendre en compte dans les futurs scripts seeds + docs.
+
+---
+
 # Bugs trouvés audit extrême — 2 mai 2026 (Cowork)
 
 ## BUG #1 — 🔴 BLOQUANT J-26 — onboardCurrentUser ne crée PAS la membership volunteer (RLS bloque)

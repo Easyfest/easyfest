@@ -27,6 +27,76 @@
 
 ---
 
+# 🚨 PRIORITÉ ABSOLUE — VALIDER LE FIX DnD POST-INVITE (BUG #1)
+
+> Cette section prime sur tout le reste. Le user a constaté en LIVE que les bénévoles **invités via le bouton 📧** (Anaïs, etc.) reçoivent bien le mail magic-link, atterrissent sur `/hub`, mais **ne peuvent pas être assignés à une équipe via drag-and-drop côté régie** : le système persiste à dire « Compte pas encore créé, invitez d'abord ce bénévole » alors qu'il EST déjà invité ET connecté. Symétriquement, côté volontaire, ils restent en « En attente d'attribution de rôle ». Ce bug est inacceptable à J-26 et doit être validé fixé en priorité 0 avant tout autre test.
+
+## SCÉNARIO E2E DnD POST-INVITE — VALIDATION UNIVERSAL FIX
+
+À exécuter EN PREMIER, avant T1, après le backup PHASE 0 :
+
+### Setup
+1. Browser easy_fest, login Pamela `pam@easyfest.test` / `easyfest-demo-2026`
+2. `/regie/icmpaca/rdl-2026/applications/manual-signup` → créer une candidature avec :
+   - email : `easyfest-extreme-dnd-{ts}@mailinator.com`
+   - nom : `Anaïs Test DnD J26`
+   - téléphone : `+33611111111`
+   - check toutes les CGU/RGPD (utilise `computer.left_click` sur les checkboxes, pas `form_input`)
+3. Status doit passer à `validated` automatiquement (manual-signup auto-valide)
+4. Sur la liste, retrouver la candidature → cliquer 📧 Inviter → confirm dialog → confirmer
+5. Toast attendu : `Mail envoyé à easyfest-extreme-dnd-{ts}@mailinator.com`
+
+### Vérif côté volontaire
+6. Ouvrir https://www.mailinator.com/v4/public/inboxes.jsp?to=easyfest-extreme-dnd-{ts} (sans @mailinator.com dans le param)
+7. Attendre le mail magic-link `Easyfest — Confirme ta candidature` (max 60s)
+8. Cliquer le lien → doit aboutir sur `/auth/callback?next=/hub` puis `/hub`
+9. ✅ Critère intermédiaire : la session est posée (vérifier `document.cookie` contient `sb-…-auth-token`)
+10. ✅ Critère intermédiaire : la membership volunteer est auto-créée (le `/hub` affiche la carte RDL 2026 et pas une page vide)
+
+### Vérif fix DnD côté régie
+11. Logout, relogin Pamela → `/regie/icmpaca/rdl-2026/planning`
+12. Filtrer ou scroller jusqu'à la carte `Anaïs Test DnD J26` dans le pool « Bénévoles à placer »
+13. Drag la carte → drop sur l'équipe `Bar` (ou n'importe quelle équipe)
+14. ✅ **Critère final BUG #1 RÉSOLU** : toast `✓ Sauvegardé`, la carte se retrouve dans la colonne Bar
+15. F5 → vérifier persistance (la carte reste dans Bar après refresh)
+16. ❌ Si toast d'erreur `Compte pas encore créé. Invitez d'abord ce bénévole` ou `Permission refusée` : BUG #1 PAS FIXÉ → noter dans `BUGS_AUDIT_EXTREME.md` avec sévérité 🔴 Bloquant et **STOP la PHASE 1**, alerter le user en chat avant de continuer.
+
+### Vérif côté volontaire après assignation
+17. Logout, relogin avec `easyfest-extreme-dnd-{ts}@mailinator.com` via magic-link Mailinator
+18. `/v/icmpaca/rdl-2026/qr` → ✅ doit afficher le QR
+19. `/v/icmpaca/rdl-2026/planning` → ✅ doit afficher l'équipe Bar (pas « En attente d'attribution »)
+
+### Test menu-mobile + clavier (accessibilité fix)
+20. Resize 412×915 (mobile)
+21. Login Pamela → planning → tap court sur la carte d'un autre pre-volunteer (s'il en reste un avec un compte invité) → menu d'équipes → choisir équipe → ✓ Sauvegardé
+22. Desktop : right-click sur la carte → menu desktop → équipe → ✓ Sauvegardé
+
+**Si tous les critères 14, 15, 18, 19 sont ✅ : BUG #1 RÉSOLU → noter dans BUGS_AUDIT_EXTREME.md `## BUG #1 — onboardCurrentUser RLS membership creation` avec statut `✅ FIXED`.**
+
+---
+
+# 📋 RÉFÉRENCE — AUDIT CODE OFFICIEL (51/100, 8 agents)
+
+> Le 2 mai 2026 a été conduit par 8 agents (CTO, Lead Dev, Mobile, IA/Auto, RSSI, Pentester, RGPD, QA Lead) un audit code de 12 modules backend + 6 modules frontend. Verdict : **51/100 — pas prêt pour J-26 sans interventions P0**.
+>
+> 15 Critiques + 25 Hautes documentés dans le PROMPT 2/2 (Claude Code). Tu n'as **pas** à corriger ces points (c'est le job de Claude Code), mais tu dois savoir qu'ils existent pour comprendre certains comportements observés en E2E. Liste pour information :
+>
+> - **C1** : RPC SQL côté client (createServerClient) sans validation membership → fuite cross-tenant possible
+> - **C2** : `validateApplication` ne vérifie pas la membership de l'admin → n'importe quel direction peut valider
+> - **C3** : magic-link callback `/auth/callback` parse hash JWT côté client uniquement (Bug #2)
+> - **C4** : `setup-password` rejette même password (Bug #3)
+> - **C5** : `inviteVolunteer` ne crée pas la membership volunteer en pré-flight (Bug #1 root cause)
+> - **F1** : DnD planning ne permet pas l'assignation aux pre-volunteers même invités
+> - **F2** : aucun ARIA-live sur les toasts (a11y)
+> - **F3** : Tailwind classes via JS template strings (CSP risk)
+> - **O1-O2** : Sentry pas activé en prod, audit_log incomplet
+> - **Q1-Q5** : 0 test E2E auto, 0 test unitaire RLS
+> - **I1** : SUPABASE_SERVICE_ROLE_KEY exposée dans `.env.deploy.local` commité
+>
+> Pour TOI Cowork, retiens : si tu observes un comportement bizarre côté UI, **screenshot + console + network** dans `BUGS_AUDIT_EXTREME.md` et passe au suivant. Claude Code rapatriera tout ça dans la PR de fix sprint suivant.
+
+---
+
 # PHASE 0 — BACKUP SAFE NET (1 min)
 
 Lance via `mcp__workspace__bash` :
@@ -103,11 +173,13 @@ Capture minimum 50 screenshots couvrant :
 - ✅ Critère : boucle complète d'onboarding
 
 ### T5 — DnD réel Planning + persistence DB
+- ⚠️ Si la SECTION PRIORITÉ ABSOLUE en haut a déjà couvert ce test avec succès, T5 est satisfait. Sinon :
 - Login Pamela, `/regie/.../planning`
 - Filtrer par nom → si bénévole avec compte actif (pas pre-) trouvé : drag → drop sur équipe → "✓ Sauvegardé"
 - F5 (refresh) → vérifier que la carte est restée dans la nouvelle équipe
 - Si tous pre-volunteers : utilise T4 d'abord pour activer un compte
 - Test menu desktop : right-click sur carte → menu équipes → choisir équipe
+- **Critère universel post-fix Bug #1** : aucun toast d'erreur "Compte pas encore créé" ne doit apparaître sur un pre-volunteer dont l'application est `validated` ET qui possède un auth.users (c.-à-d. invité ou ayant cliqué le magic-link). Le code Claude Code a pour mission d'auto-créer la membership dans ce cas.
 
 ### T6 — Broadcast Pamela → Lucas /v/feed
 - Login Pamela `/regie/messages` → cibler Bar → texte test → Diffuser
@@ -161,10 +233,12 @@ Capture minimum 50 screenshots couvrant :
 - Tap court → menu d'équipes
 - Hold + swipe → DnD mobile
 
-### T17 — Force-set-password 1er login (potentiellement non implémenté)
+### T17 — Force-set-password 1er login + idempotence (Bug #3)
 - Créer un user via T4 invite → click magic-link → arrive sur `/hub`
 - ✅ Attendu : redirect forcé `/account/setup-password` si `user_metadata.password_set !== true`
 - Si pas de redirect : BUG impl manquante (à confirmer dans le code)
+- **Test idempotence (Bug #3)** : sur la page setup-password, saisir DEUX FOIS le même password (cas réel : Pamela qui re-saisit son mot de passe demo) → ne doit PAS afficher d'erreur Supabase Auth `New password should be different from the old password`. Le server action doit court-circuiter le call Supabase si le password est égal au current.
+- **Si erreur affichée** : BUG #3 PAS FIXÉ → noter dans BUGS_AUDIT_EXTREME.md.
 
 ### T18 — Mail-tester deliverability
 - Mailinator → ne convient pas pour mail-tester. Plutôt :
@@ -172,6 +246,20 @@ Capture minimum 50 screenshots couvrant :
 - Login Pamela → applications → manual signup avec cet email → bouton Inviter
 - Sur mail-tester.com → vérifier le score
 - ✅ Critère : 9+/10. Si moins : templates Supabase Auth dashboard pas brandés.
+
+### T19 — Magic-link callback session (Bug #2)
+- Créer un user via manual-signup → bouton 📧 Inviter
+- Mailinator → cliquer le lien magic-link
+- ✅ Attendu : URL transitionne vers `/auth/callback?next=/hub` puis `/hub` avec session active (cookie `sb-…-auth-token` présent)
+- Inspecter via `mcp__Claude_in_Chrome__javascript_tool` : `JSON.stringify({cookies: document.cookie.split(';').map(c => c.trim().split('=')[0])})` → doit contenir un cookie commençant par `sb-`
+- ❌ Si redirect vers `/auth/login` ou si session vide : BUG #2 PAS FIXÉ → noter dans BUGS_AUDIT_EXTREME.md.
+
+### T20 — Seeds memberships présents (Bug #4)
+- Login Sandy `sandy@easyfest.test` → `/hub` doit afficher 3 cartes (RDL volunteer + RDL volunteer_lead + Frégus volunteer_lead)
+- Login Mahaut `mahaut@easyfest.test` → `/hub` doit afficher 1 carte (Bar post_lead)
+- Login Lucas `lucas@easyfest.test` → `/hub` doit afficher 1 carte (Bar volunteer)
+- Login Antoine `antoine@easyfest.test` → `/hub` doit afficher 1 carte (staff_scan)
+- ❌ Si une carte manquante : BUG #4 seed memberships → noter dans BUGS_AUDIT_EXTREME.md (corrigeable via `pnpm db:seed` côté Claude Code).
 
 ---
 
@@ -260,10 +348,41 @@ Liste exhaustive des traces de tests à supprimer, par table. Format :
 
 ---
 
-# PHASE 4 (OPTIONNELLE) — RE-TEST POST CLAUDE CODE
+# PHASE 4 — RE-TEST POST CLAUDE CODE (couvre les 4 Bugs + audit code 51/100)
 
-Si le user te dit plus tard « Claude Code a fini, retest » :
-- Re-roule uniquement les tests qui avaient échoué (T{X} échoués)
-- Capture nouveaux screenshots
-- Mets à jour `BUGS_AUDIT_EXTREME.md` en marquant chaque bug `✅ FIXED` ou `❌ STILL BROKEN`
-- Si tout vert : `git tag audit-extreme-validated-{date}` + push
+Quand le user dit « Claude Code a fini, retest » ou « Phase 4 retest extrême » :
+
+### Pré-flight
+1. `git pull origin main` (via bash) → vérifier que le commit Claude Code est bien présent
+2. Vérifier les migrations appliquées : Supabase Studio ou bash `supabase db remote list`
+3. Recréer un compte propre via manual-signup → invite (workflow type Anaïs) pour tester l'ENSEMBLE de la chaîne post-fix
+
+### Tests prioritaires à re-rouler (ordre)
+- **D'abord** : SCÉNARIO PRIORITÉ ABSOLUE DnD POST-INVITE (en haut du prompt) — c'est le test santé n°1
+- Puis dans l'ordre : T19 (Bug #2 callback) → T20 (Bug #4 seeds) → T17 (Bug #3 idempotent) → T1 (festival end-to-end avec finalize) → T4 (invite mailinator) → T5 (DnD universal) → T2 (QR SVG) → T3 (alerte grave)
+- Re-rouler tous les autres tests (T6→T18) seulement si les 8 prioritaires passent
+
+### Critères de validation BUGS
+
+Pour CHAQUE bug du fichier BUGS_AUDIT_EXTREME.md, modifier le statut :
+- ✅ `FIXED` : le scénario de repro ne reproduit PLUS le bug ET le critère de validation est rempli
+- ⚠️ `PARTIALLY FIXED` : le bug ne se reproduit pas mais une régression annexe est apparue (à reporter)
+- ❌ `STILL BROKEN` : le bug se reproduit avec le scénario initial → re-screenshot + re-console + re-network → ré-ouvrir le bug
+
+### Critères de validation AUDIT CODE 51/100
+
+Si Claude Code a livré la PR de sprint P0 (C1 à C5 + F1 à F3 + I1) :
+- Vérifier en E2E : pas de fuite cross-tenant (T14), pas d'admin pirate qui valide une autre asso (test ad hoc T14b à inventer), CSP headers présents (`mcp__Claude_in_Chrome__javascript_tool` : `fetch('/').then(r => Array.from(r.headers).filter(([k]) => k.toLowerCase().includes('content-security')))`)
+- Vérifier Sentry actif : recharger la prod, faire une erreur volontaire (ex. naviguer vers `/regie/null/null/planning`) puis demander à Claude Code dans la chat « confirme l'event Sentry ID = … »
+- Vérifier que `.env.deploy.local` n'est PLUS commit (bash `git ls-files | grep deploy.local` doit être vide) et que le secret a été rotated (Claude Code aura redéployé avec un nouveau `sb_secret_…`)
+
+### Validation finale & cleanup
+
+Si TOUTES les validations sont vertes :
+1. Re-screenshots commerciaux (50+ fresh screens dans `marketing/screenshots/post-fix/`)
+2. `git tag audit-extreme-validated-$(date +%Y%m%d-%H%M)` + `git push origin --tags`
+3. Mettre à jour `BUGS_AUDIT_EXTREME.md` en haut : `# 🟢 AUDIT EXTRÊME VALIDÉ — DATE — TOUS BUGS FIXED`
+4. Mettre à jour `CLEANUP_DB_AUDIT.md` avec les nouveaux comptes mailinator créés pendant la Phase 4
+5. Annoncer au user : « Phase 4 finished. {N} bugs fixed, {M} screenshots commercial frais. Le repo est `audit-extreme-validated-{tag}`. Tu peux annoncer la production J-26 RDL2026 sereinement. »
+
+Si AU MOINS UN bug reste rouge : re-générer un PROMPT_AUDIT_EXTREME_CODE_v2.md avec UNIQUEMENT les bugs restants + les régressions découvertes en Phase 4, et demander au user de relancer Claude Code.

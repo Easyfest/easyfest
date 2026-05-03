@@ -102,11 +102,11 @@ export function PlanningTeamsBoard({
       volunteerUserId: string,
       targetPositionId: string | null,
     ): Promise<{ ok: boolean; error?: string }> => {
-      if (volunteerUserId.startsWith("pre-")) {
-        setFeedback("⏳ Compte pas encore créé — invite ce bénévole d'abord");
-        setTimeout(() => setFeedback(null), 3500);
-        return { ok: false, error: "pending_account" };
-      }
+      // 🆕 Universal pre-volunteer fix : on n'arrête PLUS le drag côté client.
+      // Le serveur (assignVolunteerToTeam) détecte le préfixe `pre-<email>` et
+      // auto-crée la membership volunteer si auth.users + volunteer_application
+      // validated existent. Si l'une des conditions manque, le serveur retourne
+      // un message clair (Compte auth introuvable / Aucune candidature validée).
 
       // Snapshot pour rollback
       const snapTeams = teams;
