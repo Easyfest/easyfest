@@ -12,6 +12,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { assignVolunteerToTeam } from "@/app/actions/planning";
 import { AssignProvider, type AssignVolunteerSummary } from "@/components/AssignContext";
@@ -56,10 +57,18 @@ export function PlanningTeamsBoard({
   eventId,
   highlightTeamSlug,
 }: Props) {
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>(initialTeams);
   const [pool, setPool] = useState<PlanningVolunteer[]>(initialPool);
   const [, startTransition] = useTransition();
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Bug #5 fix : si les props re-fetch côté serveur (router.refresh) avec un nouvel
+  // état (membership créée → bénévole sort des preVolunteers), on resync l'état local.
+  useEffect(() => {
+    setTeams(initialTeams);
+    setPool(initialPool);
+  }, [initialTeams, initialPool]);
   const [filter, setFilter] = useState("");
   const [menu, setMenu] = useState<MenuState>({
     open: false,
@@ -162,12 +171,19 @@ export function PlanningTeamsBoard({
           } else {
             setFeedback("✓ Sauvegardé");
             setTimeout(() => setFeedback(null), 2000);
+            // Bug #5 fix : router.refresh() force Next à re-fetch les Server
+            // Components → page.tsx requery les memberships/applications/assignments
+            // → le useEffect [initialTeams, initialPool] resync l'état local. Sans
+            // ça, le pre-volunteer drag affichait l'optimistic update mais le user
+            // avait toujours user_id préfixé "pre-" en local → état incohérent au
+            // prochain drag/F5. Maintenant le serveur est la source de vérité.
+            router.refresh();
             resolve({ ok: true });
           }
         });
       });
     },
-    [eventId, pool, teams],
+    [eventId, pool, teams, router],
   );
 
   const openMenu = useCallback(

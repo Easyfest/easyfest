@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { createServerClient, createServiceClient } from "@/lib/supabase/server";
+import { createServerClient } from "@/lib/supabase/server";
 
 interface ReassignInput {
   assignmentId: string;
@@ -117,257 +117,45 @@ interface AssignToTeamInput {
 }
 
 /**
- * Affecte un bénévole à une équipe (position) sur un event :
- * 1. Supprime toutes ses assignments actives sur l'event
- * 2. Si targetPositionId fourni, crée une assignment sur le 1er shift disponible de cette position
- * 3. Si pas de shift défini, crée un shift "couverture totale" par défaut
+ * Affecte un bénévole à une équipe (position) sur un event — 100% atomique côté SQL.
  *
- * 🆕 Universal pre-volunteer fix (audit-extreme retest 3 mai 2026) :
- * Si volunteerUserId commence par `pre-<email>`, on auto-crée la membership
- * volunteer (via service-role bypass RLS) à condition qu'un auth.users existe
- * pour cet email ET qu'une volunteer_application validated existe pour cet
- * email + cet event_id. Permet à la régie de placer ses bénévoles sur le
- * planning même AVANT qu'ils aient cliqué leur magic-link — la membership
- * sera créée rétroactivement et persistée en DB.
+ * Bug #5 fix (audit-extreme retest 3 mai 2026) : la séquence d'INSERTs précédente
+ * (delete assignments + insert membership + insert profile + insert assignment +
+ * insert audit_log) n'était pas transactionnelle. Une erreur à mi-parcours laissait
+ * la BDD dans un état incohérent (membership sans assignment, ou assignment sans
+ * shift). La nouvelle implémentation délègue tout à `assign_volunteer_atomic`
+ * (cf. migration 20260503010000) qui fait l'ensemble dans une seule transaction
+ * SECURITY DEFINER avec contrôle de permission direction|volunteer_lead.
+ *
+ * Le RPC supporte :
+ * - `pre-<email>` : auto-création membership + profile si auth.users existe ET
+ *   volunteer_application validated existe pour cet event_id (defense-in-depth)
+ * - UUID direct : reassignement classique
+ * - `targetPositionId === null` : retrait du planning (suppression assignments event)
  */
-export async function assignVolunteerToTeam(input: AssignToTeamInput) {
+export async function assignVolunteerToTeam(input: AssignToTeamInput): Promise<{
+  ok: boolean;
+  error?: string;
+  realUserId?: string;
+}> {
   const supabase = createServerClient();
   const { data: userData } = await supabase.auth.getUser();
   if (!userData.user) return { ok: false, error: "Non authentifié" };
 
-  // ⚠️ Multi-memberships safe : Sandy a volunteer + volunteer_lead → .maybeSingle()
-  // erroriait, retournant Permission refusée à chaque drag. On agrège via .some().
-  const { data: memberships } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("user_id", userData.user.id)
-    .eq("event_id", input.eventId)
-    .eq("is_active", true);
-
-  const allowedRoles = ["direction", "volunteer_lead"];
-  const hasAccess = (memberships ?? []).some((m: any) => allowedRoles.includes(m.role));
-  if (!hasAccess) {
-    return { ok: false, error: "Permission refusée" };
-  }
-
-  // 🆕 Auto-création de la membership pour les pre-volunteers (préfixe `pre-<email>`)
-  let realUserId = input.volunteerUserId;
-  if (input.volunteerUserId.startsWith("pre-")) {
-    const email = input.volunteerUserId.slice(4).toLowerCase();
-    const admin: any = createServiceClient();
-
-    // 1. Vérifier qu'une auth.users existe (le user a déjà été créé en BDD)
-    //    Note : `listUsers()` paginé par défaut à 50 ; pour les events à >50 users
-    //    on itère jusqu'à trouver l'email cible.
-    let authUser: { id: string; email: string | null } | null = null;
-    let page = 1;
-    const PER_PAGE = 200;
-    // hard-cap 10 pages = 2000 users max — au-delà on considère introuvable
-    for (let i = 0; i < 10 && !authUser; i += 1) {
-      const { data: usersPage, error: listErr } = await admin.auth.admin.listUsers({
-        page,
-        perPage: PER_PAGE,
-      });
-      if (listErr) {
-        return { ok: false, error: `Auth lookup failed: ${listErr.message}` };
-      }
-      const found = (usersPage?.users ?? []).find(
-        (u: any) => (u?.email ?? "").toLowerCase() === email,
-      );
-      if (found) {
-        authUser = { id: found.id, email: found.email ?? null };
-        break;
-      }
-      if (!usersPage?.users || usersPage.users.length < PER_PAGE) break;
-      page += 1;
-    }
-
-    if (!authUser) {
-      return {
-        ok: false,
-        error: `Compte auth introuvable pour ${email} — clique 📧 Inviter dans Candidatures`,
-      };
-    }
-
-    // 2. Vérifier qu'une volunteer_application validated existe pour cet email + cet event
-    const { data: app, error: appErr } = await admin
-      .from("volunteer_applications")
-      .select(
-        "id, full_name, first_name, last_name, birth_date, gender, phone, profession, address_street, address_city, address_zip, size, diet_notes, diet_type, carpool, available_setup, available_teardown, skills, limitations, bio, avatar_url, is_returning",
-      )
-      .eq("email", email)
-      .eq("event_id", input.eventId)
-      .eq("status", "validated")
-      .maybeSingle();
-
-    if (appErr) {
-      return { ok: false, error: `Lookup application: ${appErr.message}` };
-    }
-    if (!app) {
-      return {
-        ok: false,
-        error: `Aucune candidature validée pour ${email} sur cet event — valide d'abord la candidature`,
-      };
-    }
-
-    // 3. Créer la membership volunteer (bypass RLS via service client)
-    const { error: memErr } = await admin.from("memberships").insert({
-      user_id: authUser.id,
-      event_id: input.eventId,
-      role: "volunteer",
-      is_active: true,
-    });
-    if (memErr && memErr.code !== "23505") {
-      // 23505 = duplicate key (membership déjà créée par un onboardCurrentUser concurrent) → ignorer
-      return { ok: false, error: `Création membership: ${memErr.message}` };
-    }
-
-    // 4. Créer le profil volunteer si manquant (idempotent via maybeSingle)
-    const { data: existingProfile } = await admin
-      .from("volunteer_profiles")
-      .select("user_id")
-      .eq("user_id", authUser.id)
-      .maybeSingle();
-    if (!existingProfile) {
-      await admin.from("volunteer_profiles").insert({
-        user_id: authUser.id,
-        full_name: app.full_name ?? email,
-        first_name: app.first_name,
-        last_name: app.last_name,
-        birth_date: app.birth_date,
-        gender: app.gender,
-        phone: app.phone,
-        email,
-        address_street: app.address_street,
-        address_city: app.address_city,
-        address_zip: app.address_zip,
-        profession: app.profession,
-        size: app.size,
-        diet_notes: app.diet_notes,
-        diet_type: app.diet_type,
-        carpool: app.carpool,
-        available_setup: app.available_setup,
-        available_teardown: app.available_teardown,
-        skills: app.skills ?? [],
-        limitations: app.limitations ?? [],
-        bio: app.bio,
-        avatar_url: app.avatar_url,
-        is_returning: app.is_returning ?? false,
-      });
-      // Erreur silencieuse acceptable : la membership est l'invariant critique
-      // (le profil sera complété au prochain login bénévole via onboardCurrentUser).
-    }
-
-    // 5. Audit log dédié
-    await admin.from("audit_log").insert({
-      user_id: userData.user.id,
-      event_id: input.eventId,
-      action: "membership.auto_created_via_assignment",
-      payload: {
-        email,
-        target_user_id: authUser.id,
-        reason: "drag_pre_volunteer",
-      },
-    });
-
-    realUserId = authUser.id;
-  }
-
-  // 1. Récupérer toutes les assignments du bénévole sur les shifts de cet event
-  const { data: existingAssignments } = await supabase
-    .from("assignments")
-    .select(`id, shift:shift_id (position:position_id (event_id))`)
-    .eq("volunteer_user_id", realUserId)
-    .in("status", ["pending", "validated"]);
-
-  const eventAssignmentIds = (existingAssignments ?? [])
-    .filter((a: any) => a.shift?.position?.event_id === input.eventId)
-    .map((a: any) => a.id);
-
-  if (eventAssignmentIds.length > 0) {
-    const { error: delErr } = await supabase
-      .from("assignments")
-      .delete()
-      .in("id", eventAssignmentIds);
-    if (delErr) return { ok: false, error: `Suppression échouée : ${delErr.message}` };
-  }
-
-  // 2. Si targetPositionId est null, on s'arrête ici (= renvoi au pool)
-  if (!input.targetPositionId) {
-    await supabase.from("audit_log").insert({
-      user_id: userData.user.id,
-      event_id: input.eventId,
-      action: "assignment.team.removed",
-      payload: { volunteer_user_id: realUserId },
-    });
-    revalidatePath("/regie", "layout");
-    return { ok: true, realUserId };
-  }
-
-  // 3. Sinon, trouver un shift dans la position cible
-  const { data: shifts } = await supabase
-    .from("shifts")
-    .select("id, starts_at")
-    .eq("position_id", input.targetPositionId)
-    .order("starts_at", { ascending: true })
-    .limit(1);
-
-  let targetShiftId = shifts?.[0]?.id;
-
-  // 3b. Pas de shift défini ? Créer un shift "default" couvrant tout l'event
-  if (!targetShiftId) {
-    const { data: ev } = await supabase
-      .from("events")
-      .select("starts_at, ends_at")
-      .eq("id", input.eventId)
-      .maybeSingle();
-    if (!ev) return { ok: false, error: "Event introuvable" };
-
-    const { data: newShift, error: shiftErr } = await supabase
-      .from("shifts")
-      .insert({
-        position_id: input.targetPositionId,
-        starts_at: ev.starts_at,
-        ends_at: ev.ends_at,
-        needs_count: 1,
-        notes: "Shift couverture totale créé via planning équipes",
-      })
-      .select("id")
-      .single();
-    if (shiftErr || !newShift) {
-      return { ok: false, error: `Création shift échouée : ${shiftErr?.message}` };
-    }
-    targetShiftId = newShift.id;
-  }
-
-  // 4. Créer l'assignment
-  const { error: insertErr } = await supabase.from("assignments").insert({
-    shift_id: targetShiftId,
-    volunteer_user_id: realUserId,
-    status: "validated",
-    assigned_by: userData.user.id,
+  const { data, error } = await (supabase as any).rpc("assign_volunteer_atomic", {
+    p_user_or_email: input.volunteerUserId,
+    p_position_id: input.targetPositionId,
+    p_event_id: input.eventId,
+    p_actor_user_id: userData.user.id,
   });
 
-  if (insertErr) {
-    // Si conflict (déjà assigné — peut arriver après cleanup), on considère ok
-    if (insertErr.code === "23505") {
-      // already exists — pas grave
-    } else {
-      return { ok: false, error: `Assignment échouée : ${insertErr.message}` };
-    }
+  if (error) {
+    return { ok: false, error: error.message };
   }
-
-  await supabase.from("audit_log").insert({
-    user_id: userData.user.id,
-    event_id: input.eventId,
-    action: "assignment.team.assigned",
-    payload: {
-      volunteer_user_id: realUserId,
-      position_id: input.targetPositionId,
-      shift_id: targetShiftId,
-    },
-  });
+  if (!data?.ok) {
+    return { ok: false, error: data?.error ?? "Échec assignation" };
+  }
 
   revalidatePath("/regie", "layout");
-  return { ok: true, realUserId };
+  return { ok: true, realUserId: data.real_user_id };
 }
