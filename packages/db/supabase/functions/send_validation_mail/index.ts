@@ -229,7 +229,13 @@ Deno.serve(async (req) => {
 
   const orgSlug = (app as any).events?.organization?.slug ?? "icmpaca";
   const eventSlug = (app as any).events?.slug ?? "rdl-2026";
-  const redirectTo = `${APP_URL}/v/${orgSlug}/${eventSlug}`;
+  // Cible /auth/callback (page client) qui parse le hash JWT du flow implicit
+  // Supabase, pose la session via setSession(), puis redirige vers ?next=/hub.
+  // /hub déclenche onboardCurrentUser qui crée la membership volunteer.
+  // L'utilisateur peut ensuite cliquer sur la carte volunteer pour aller sur
+  // /v/${orgSlug}/${eventSlug}. Le slug est conservé en query pour un
+  // éventuel usage futur (lien direct multi-event après onboarding).
+  const redirectTo = `${APP_URL}/auth/callback?next=${encodeURIComponent("/hub")}&event=${encodeURIComponent(eventSlug)}&org=${encodeURIComponent(orgSlug)}`;
 
   const { data: linkData, error: linkErr } = await supabase.auth.admin.generateLink({
     type: "magiclink",

@@ -61,7 +61,23 @@ export async function setupPassword(formData: FormData): Promise<PasswordResult>
     data: { ...(user.user_metadata ?? {}), password_set: true },
   });
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Cas Supabase Auth refuse "new password = current password" : on tente
+    // alors d'aligner uniquement le metadata password_set pour ne pas
+    // bloquer l'utilisateur (T17 / BUG #3 audit-extreme). On considère le
+    // mot de passe comme déjà défini puisque le serveur l'a accepté à la
+    // comparaison — il l'a juste refusé pour identité, pas pour invalidité.
+    const sameAsCurrent =
+      /password.*(same|different|unchanged|identical|same_password)/i.test(error.message) ||
+      /should be different/i.test(error.message);
+    if (!sameAsCurrent) {
+      return { ok: false, error: error.message };
+    }
+    const { error: metaErr } = await supabase.auth.updateUser({
+      data: { ...(user.user_metadata ?? {}), password_set: true },
+    });
+    if (metaErr) return { ok: false, error: metaErr.message };
+  }
 
   redirect("/hub");
 }

@@ -120,11 +120,16 @@ export async function inviteVolunteer(applicationId: string) {
   // Fallback URL = easyfest.app (prod). NEXT_PUBLIC_APP_URL aligné avec onboard-self-serve.ts.
   const baseUrl =
     process.env["NEXT_PUBLIC_APP_URL"] ?? process.env["NEXT_PUBLIC_SITE_URL"] ?? "https://easyfest.app";
+  // Le redirect cible /auth/callback (page client) qui parse le hash JWT
+  // produit par le flow implicit, pose la session via setSession() puis
+  // route vers ?next=/hub où onboardCurrentUser crée la membership.
+  // Sans cette indirection, Supabase ramène l'user sur /hub#access_token=…
+  // que Next.js (server-side, hash invisible) ne peut pas exploiter.
   const { error: otpErr } = await supabase.auth.signInWithOtp({
     email: app.email,
     options: {
       shouldCreateUser: true,
-      emailRedirectTo: `${baseUrl}/hub`,
+      emailRedirectTo: `${baseUrl}/auth/callback?next=/hub`,
     },
   });
 
